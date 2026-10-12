@@ -1,0 +1,32 @@
+{
+  "expo": {
+    "name": "Connect Me Admin",
+    "slug": "connectme-admin",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "backgroundColor": "#0B0B10"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.connectme.admin"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#0B0B10"
+      },
+      "package": "com.connectme.admin"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store"
+    ],
+    "scheme": "connectme"
+  }
+}

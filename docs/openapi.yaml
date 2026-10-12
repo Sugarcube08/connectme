@@ -1,0 +1,518 @@
+openapi: 3.1.0
+info:
+  title: Connect Me API
+  version: 1.0.0
+  description: |
+    Connect Me is a lightweight, single-use QR-based professional networking contact collection platform.
+    Designed for conferences such as Devcon.
+    
+    CRITICAL PRODUCT RULE: Connect Me collects other people's contact info.
+    Public visitors are never given the owner's phone number, email, or private links.
+servers:
+  - url: /api/v1
+    description: Current deployment API v1
+
+paths:
+  /public/codes/{token}:
+    get:
+      summary: Verify public code eligibility
+      description: Validates whether a token is eligible for contact submission.
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Base64URL 128-bit random token
+      responses:
+        '200':
+          description: Eligibility status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicCodeVerificationResponse'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+
+  /public/codes/{token}/redeem:
+    post:
+      summary: Atomically redeem code and submit contact information
+      description: |
+        Atomically redeems the access code and inserts contact submission.
+        Supports application/json and multipart/form-data with an optional profile picture (JPEG, PNG, WebP <= 2MB).
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ContactSubmissionInput'
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                fullName:
+                  type: string
+                phoneNumber:
+                  type: string
+                email:
+                  type: string
+                organization:
+                  type: string
+                role:
+                  type: string
+                profileUrl:
+                  type: string
+                discussionNotes:
+                  type: string
+                profileImage:
+                  type: string
+                  format: binary
+                  description: Optional profile picture (<= 2MB)
+              required:
+                - fullName
+                - phoneNumber
+      responses:
+        '201':
+          description: Submission saved and code consumed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubmissionSuccessResponse'
+        '400':
+          description: Validation error
+          $ref: '#/components/responses/ErrorResponse'
+        '409':
+          description: Code already consumed or concurrent conflict
+          $ref: '#/components/responses/ErrorResponse'
+        '410':
+          description: Code expired or revoked
+          $ref: '#/components/responses/ErrorResponse'
+
+  /auth/login:
+    post:
+      summary: Administrator login
+      description: Sets HTTP-only web session cookie and returns mobile bearer token.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminLoginInput'
+      responses:
+        '200':
+          description: Authentication successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      user:
+                        $ref: '#/components/schemas/AdminUser'
+                      token:
+                        type: string
+                        description: JWT bearer token for React Native mobile app
+        '401':
+          $ref: '#/components/responses/ErrorResponse'
+
+  /auth/logout:
+    post:
+      summary: Administrator logout
+      responses:
+        '200':
+          description: Logged out
+
+  /auth/me:
+    get:
+      summary: Get current authenticated administrator
+      security:
+        - BearerAuth: []
+        - CookieAuth: []
+      responses:
+        '200':
+          description: Current admin details
+        '401':
+          $ref: '#/components/responses/ErrorResponse'
+
+  /admin/dashboard:
+    get:
+      summary: Admin dashboard metrics
+      security:
+        - BearerAuth: []
+        - CookieAuth: []
+      responses:
+        '200':
+          description: Dashboard metrics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardMetrics'
+
+  /admin/codes:
+    get:
+      summary: List access codes
+      security:
+        - BearerAuth: []
+        - CookieAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [ACTIVE, CONSUMED, REVOKED, EXPIRED]
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Paginated code list (raw tokens are never returned)
+    post:
+      summary: Generate single or batch access codes
+      security:
+        - BearerAuth: []
+        - CookieAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                count:
+                  type: integer
+                  default: 1
+                  maximum: 100
+                label:
+                  type: string
+                expiresAt:
+                  type: string
+                  format: date-time
+      responses:
+        '201':
+          description: Created codes with one-time tokens and QR assets
+
+  /admin/codes/{id}/revoke:
+    post:
+      summary: Revoke an active code
+      security:
+        - BearerAuth: []
+        - CookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Code revoked
+        '404':
+          description: Code not found or not active
+
+  /admin/codes/export:
+    get:
+      summary: Export codes to CSV
+      security:
+        - BearerAuth: []
+        - CookieAuth: []
+      responses:
+        '200':
+          description: CSV file download
+          content:
+            text/csv:
+              schema:
+                type: string
+
+  /admin/contacts:
+    get:
+      summary: List contacts
+      security:
+        - BearerAuth: []
+        - CookieAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [NEW, CONTACTED, REPLIED, OPPORTUNITY, ARCHIVED]
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Paginated contacts
+
+  /admin/contacts/{id}:
+    get:
+      summary: Get contact detail
+      security:
+        - BearerAuth: []
+        - CookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Contact detail
+    patch:
+      summary: Update contact status or discussion notes
+      security:
+        - BearerAuth: []
+        - CookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                followUpStatus:
+                  type: string
+                  enum: [NEW, CONTACTED, REPLIED, OPPORTUNITY, ARCHIVED]
+                discussionNotes:
+                  type: string
+      responses:
+        '200':
+          description: Contact updated
+
+  /admin/contacts/{id}/image:
+    get:
+      summary: Stream profile image BYTEA
+      security:
+        - BearerAuth: []
+        - CookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Profile image binary
+          content:
+            image/webp:
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: Image not found
+    delete:
+      summary: Delete profile image
+      security:
+        - BearerAuth: []
+        - CookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Image deleted
+
+  /admin/contacts/export:
+    get:
+      summary: Export contacts to CSV
+      security:
+        - BearerAuth: []
+        - CookieAuth: []
+      responses:
+        '200':
+          description: CSV file download
+          content:
+            text/csv:
+              schema:
+                type: string
+
+  /admin/settings:
+    get:
+      summary: Get application settings
+      security:
+        - BearerAuth: []
+        - CookieAuth: []
+      responses:
+        '200':
+          description: Application settings
+    patch:
+      summary: Update application settings
+      security:
+        - BearerAuth: []
+        - CookieAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                brandName:
+                  type: string
+                privacyNotice:
+                  type: string
+                defaultExpiryDays:
+                  type: integer
+      responses:
+        '200':
+          description: Updated settings
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    CookieAuth:
+      type: apiKey
+      in: cookie
+      name: connectme_session
+
+  schemas:
+    PublicCodeVerificationResponse:
+      type: object
+      properties:
+        eligible:
+          type: boolean
+        codeStatus:
+          type: string
+          enum: [ACTIVE, CONSUMED, REVOKED, EXPIRED]
+        brandName:
+          type: string
+        message:
+          type: string
+
+    ContactSubmissionInput:
+      type: object
+      required:
+        - fullName
+        - phoneNumber
+      properties:
+        fullName:
+          type: string
+        phoneNumber:
+          type: string
+        email:
+          type: string
+        organization:
+          type: string
+        role:
+          type: string
+        profileUrl:
+          type: string
+        discussionNotes:
+          type: string
+
+    SubmissionSuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        submittedAt:
+          type: string
+          format: date-time
+
+    AdminLoginInput:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+
+    AdminUser:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    DashboardMetrics:
+      type: object
+      properties:
+        totalCodes:
+          type: integer
+        activeCodes:
+          type: integer
+        consumedCodes:
+          type: integer
+        revokedCodes:
+          type: integer
+        expiredCodes:
+          type: integer
+        totalSubmissions:
+          type: integer
+        statusDistribution:
+          type: object
+
+  responses:
+    ErrorResponse:
+      description: API Error response
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+                example: false
+              error:
+                type: object
+                properties:
+                  code:
+                    type: string
+                  message:
+                    type: string
+                  details:
+                    nullable: true

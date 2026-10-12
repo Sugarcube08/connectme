@@ -1,0 +1,24 @@
+{
+  "name": "connect-me",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "turbo run build",
+    "dev:api": "pnpm --filter @connectme/api dev",
+    "dev:web": "pnpm --filter @connectme/web dev",
+    "dev:mobile": "pnpm --filter @connectme/mobile start",
+    "dev": "turbo run dev --parallel",
+    "test": "turbo run test",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "db:generate": "pnpm --filter @connectme/database generate",
+    "db:migrate": "pnpm --filter @connectme/database migrate",
+    "db:bootstrap": "pnpm --filter @connectme/database bootstrap",
+    "clean": "rm -rf node_modules apps/*/node_modules packages/*/node_modules"
+  },
+  "devDependencies": {
+    "turbo": "^2.4.4",
+    "typescript": "^5.7.3"
+  },
+  "packageManager": "pnpm@12.11.2"
+}
