@@ -2,9 +2,19 @@
 
 This guide covers the supported deployment shapes for Connect Me. The Express API and Next.js web application remain separate deployable processes in all modes; “combined” means one public web origin, not merging the API into Next.js.
 
+For the Vercel-first API deployment path, see [Deploy the Connect Me API to Vercel](VERCEL_API.md).
+
+**Database provider:** Connect Me now targets MySQL through Prisma. The PostgreSQL migration history has been replaced with a fresh MySQL baseline because Prisma migrations are provider-specific. Use an empty MySQL database for this baseline. If you have valuable data in a previous PostgreSQL database, export and migrate that data separately before switching; do not run this baseline against the old PostgreSQL database.
+
 ## 1. Required configuration
 
-Create a deployment-specific `.env` from the safe template:
+For independent local app development, use the app-specific templates:
+- `apps/api/.env.example` → `apps/api/.env`
+- `apps/web/.env.example` → `apps/web/.env`
+
+The API example documents the Prisma MySQL URL shape and required signing keys. The web example contains only the server-side `API_INTERNAL_URL`; it must not receive database credentials or signing secrets.
+
+Create a deployment-specific root `.env` from the safe template for Docker Compose and monorepo-level database tooling:
 
 ```bash
 cp .env.example .env
@@ -13,37 +23,33 @@ cp .env.example .env
 Populate every required value. Generate independent signing keys, never reuse them between environments:
 
 ```bash
-openssl rand -hex 24  # use the output for POSTGRES_PASSWORD
+openssl rand -hex 24  # use the output for MYSQL_ROOT_PASSWORD
 openssl rand -hex 32  # use the output for SESSION_SECRET
 openssl rand -hex 32  # run again for JWT_SECRET
 ```
 
-Use a URL-safe password such as random hex for PostgreSQL. `DATABASE_URL` must be a literal PostgreSQL connection string for processes running on the host. Docker Compose constructs a separate container-to-database URL using the configured role/password and the internal `postgres` hostname.
+Use a URL-safe password such as random hex for Compose-based MySQL credentials. A Prisma MySQL URL has the form `mysql://USER:PASSWORD@HOST:3306/DATABASE`. Reserved characters in usernames, passwords, database names, and URL option values must be percent-encoded. The API validates the URL's scheme, credentials, host, port, database path, and percent-encoding before startup. `DATABASE_URL` must be a literal MySQL connection string for processes running on the host. Docker Compose constructs a separate container-to-database URL using the configured app user/password and the internal `mysql` hostname.
 
 | Variable | Required | Used by | Purpose |
 |---|---|---|---|
-| `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` | Yes for Compose | PostgreSQL/Compose | Database role, secret and database name. No default role or password is supplied. |
+| `MYSQL_ROOT_PASSWORD`, `MYSQL_USER`, `MYSQL_PASSWORD`, `MYSQL_DATABASE` | Yes for Compose | MySQL/Compose | Distinct root password, least-privilege application user/password, and database name. No default credentials are supplied. |
 | `DATABASE_URL` | Yes for host processes | API, Prisma CLI | Database connection reachable from the host process. |
 | `TEST_DATABASE_URL` | Yes for integration tests | Vitest | Isolated test database; its database name must end in `_test` or `_testing`. |
 | `SESSION_SECRET`, `JWT_SECRET` | Yes | API | Separate keys for browser session and mobile bearer-token signing. At least 32 characters each. |
-| `CORS_ORIGIN` | Required in production | API | Comma-separated, exact browser origins, without trailing slashes. Never use `*` with credentialed requests. |
-| `QR_CANONICAL_ORIGIN` | Required in production | API | Public origin used to construct QR URLs. |
-| `NEXT_PUBLIC_APP_URL` | Yes for bootstrap | Bootstrap CLI | Public web origin; setup links end in `/setup` and do not include the setup token. |
-| `API_INTERNAL_URL` | Yes when web is separate from API | Next.js server | Server-only URL of Express. It is never placed in browser code. |
+| `NEXT_PUBLIC_APP_URL` | Optional for bootstrap | Bootstrap CLI | Public web origin; setup links end in `/setup` and do not include the setup token. Set it when running bootstrap outside Vercel if the default local URL is not correct. |
+| `API_INTERNAL_URL` | Yes when web is separate from API | Next.js server | Server-only URL of Express. It is never placed in browser code. The proxy sends its public origin to the API for QR generation. |
 | `COMPOSE_API_INTERNAL_URL` | Required for web-only Compose deployments | Docker Compose / web container | Optional override passed to the web container as `API_INTERNAL_URL`; leave blank for combined mode, where the private Compose service URL is used. |
-| `NEXT_PUBLIC_API_BASE_URL` | Optional | Web browser bundle | Public API origin for direct cross-origin browser requests. Leave blank for the recommended same-origin web proxy. This is a build-time public value, not a secret. |
 | `EXPO_PUBLIC_API_URL` | For device/mobile release | Expo app | Public API origin reachable from the mobile device. |
 
-Do not copy the blank values unchanged into a running environment. Never commit `.env`, database dumps, signing secrets, or a generated bootstrap token.
+Do not copy the blank values unchanged into a running environment. Never commit `.env`, database dumps, signing secrets, or a generated bootstrap token. `CORS_ORIGIN` and `QR_CANONICAL_ORIGIN` are no longer used and should be removed from existing deployment environment settings.
 
 ## 2. Combined public origin with Docker Compose
 
 This mode places Next.js and Express in separate containers while exposing the website as the normal public entry point. The web process proxies API paths to Express with the runtime `API_INTERNAL_URL`; browser JavaScript normally uses same-origin relative paths.
 
-1. Set `NEXT_PUBLIC_APP_URL` and `QR_CANONICAL_ORIGIN` to the public web origin, such as `https://connectme.example.com`.
-2. Set `CORS_ORIGIN` to that exact origin. For local testing use `http://localhost:3000`.
-3. Generate separate `SESSION_SECRET` and `JWT_SECRET` values.
-4. Confirm `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` and the local `DATABASE_URL` are populated.
+1. Set `NEXT_PUBLIC_APP_URL` to the public web origin for the setup link, if running the bootstrap CLI outside Vercel.
+2. Generate separate `SESSION_SECRET` and `JWT_SECRET` values.
+3. Confirm the MySQL database and local `DATABASE_URL` are populated. No fixed CORS or QR-origin variables are required.
 
 Run the managed Prisma migration and bootstrap before starting the app:
 
@@ -73,10 +79,10 @@ Migrations are deliberately not run on API startup. Apply migrations as a deploy
 The Compose profiles are designed to avoid starting unrelated services:
 
 ```bash
-# API + PostgreSQL only; no Next.js process.
+# API + MySQL only; no Next.js process.
 docker compose --profile api up --build -d api
 
-# Next.js only; API and PostgreSQL must already be hosted elsewhere.
+# Next.js only; API and MySQL must already be hosted elsewhere.
 docker compose --profile web up --build -d web
 ```
 
@@ -97,22 +103,22 @@ The images carry the built monorepo and workspace dependencies. The Docker build
 
 ### API service
 
-Supply the API container with production values for `NODE_ENV`, `PORT`, `DATABASE_URL`, `SESSION_SECRET`, `JWT_SECRET`, `CORS_ORIGIN`, and `QR_CANONICAL_ORIGIN`. Its database URL must reference the database host/service accessible from the API container, not `localhost` unless PostgreSQL is in that same container (not recommended). Keep the database network private.
+Supply the API function with production values for `NODE_ENV`, `DATABASE_URL`, `SESSION_SECRET`, and `JWT_SECRET`. Also configure any required limits such as `MAX_IMAGE_SIZE_BYTES`. Its MySQL URL must reference the provider's host and database. Keep the database network private.
 
 ### Web service
 
-Supply the web container with `API_INTERNAL_URL` pointing to the deployed API origin or private service address and `NEXT_PUBLIC_APP_URL` pointing to the public website origin. When the browser should use the same-origin proxy, leave `NEXT_PUBLIC_API_BASE_URL` empty. In this arrangement API and web are separately deployed but the browser still talks only to the web origin.
+Supply the web container with `API_INTERNAL_URL` pointing to the deployed API origin or private service address and `NEXT_PUBLIC_APP_URL` pointing to the public website origin. The browser always uses the same-origin proxy. In this arrangement API and web are separately deployed but the browser still talks only to the web origin. QR links use the origin provided by the web proxy. First-admin setup stores that website origin in MySQL, so later authenticated mobile code generation uses the same web origin even when the mobile request has no browser Origin header. Vercel deployment metadata/request host remains the fallback if setup did not provide an origin.
 
-To have browser JavaScript call the API's public origin directly, set `NEXT_PUBLIC_API_BASE_URL=https://api.example.com` as a **web build argument** and rebuild the web target. Configure `CORS_ORIGIN` on the API to include the exact web origin. Production session cookies use `Secure` and `SameSite=None` to allow credentialed cross-origin use; browser third-party-cookie restrictions can still apply, so same-origin proxying is preferred.
+Browser JavaScript is intentionally not configured for direct cross-origin API requests. It calls the same-origin Next.js proxy, which strips browser Origin metadata before forwarding to Express and supplies the public origin for QR generation. This allows the API and web to live in different Vercel projects without maintaining a fixed CORS allow-list.
 
 Mobile clients call the API directly and should receive `EXPO_PUBLIC_API_URL` at Expo build time. Never put database URLs, signing keys, or other secrets in `NEXT_PUBLIC_*` / `EXPO_PUBLIC_*` values.
 
 ## 4. Local host process deployment
 
-Start PostgreSQL with Compose and run the API/web in development mode on the host:
+Start MySQL with Compose and run the API/web in development mode on the host:
 
 ```bash
-docker compose up -d postgres
+docker compose up -d mysql
 pnpm install
 pnpm db:generate
 pnpm db:migrate
@@ -134,13 +140,13 @@ The web default is port 3000 and API default is port 4000. `API_INTERNAL_URL=htt
 
 `pnpm db:bootstrap` generates an unguessable one-time setup token and creates a pending placeholder row with a random, non-meaningful identifier. It does not set a username, password, email address, or default login. The owner enters the token manually on `/setup` and selects the identity/password on that page.
 
-The token is hashed in PostgreSQL, expires, is atomically consumed at setup, and is removed after activation. The `is_initial_admin` unique constraint is an additional database-level guarantee that only one initial admin can be activated. Setup status does not disclose the placeholder username. URLs do not carry tokens.
+The token is hashed in MySQL, expires, is atomically consumed at setup, and is removed after activation. The `is_initial_admin` unique constraint is an additional database-level guarantee that only one initial admin can be activated. Setup status does not disclose the placeholder username. URLs do not carry tokens.
 
 If a pending token is lost or expired, deliberately rotate it with `pnpm db:bootstrap:rotate` or run `pnpm db:bootstrap:rotate` in the bootstrap container. This is only allowed while no admin is active. Once initialization completes, re-running bootstrap or rotation refuses; it does not automatically reopen setup. Any emergency recovery should be an explicit operator-led database procedure with a backup.
 
 ## 7. Integration tests
 
-The API integration tests delete and recreate rows. Set `TEST_DATABASE_URL` to an isolated PostgreSQL database ending in `_test` or `_testing`, apply the Prisma migrations to it, then run:
+The API integration tests delete and recreate rows. Set `TEST_DATABASE_URL` to an isolated MySQL database ending in `_test` or `_testing`, apply the Prisma migrations to it, then run:
 
 ```bash
 pnpm test

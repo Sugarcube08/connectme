@@ -9,15 +9,13 @@ RUN corepack enable && corepack prepare pnpm@12.11.2 --activate
 # Keep the whole workspace in the build context because shared packages are linked
 # with workspace:* and both server applications import generated Prisma/client code.
 COPY . .
-ARG NEXT_PUBLIC_API_BASE_URL=""
-ENV NEXT_PUBLIC_API_BASE_URL=$NEXT_PUBLIC_API_BASE_URL
 RUN pnpm install --frozen-lockfile
 
 # Prisma generation validates the datasource URL but does not connect to a database.
 # Use throwaway random build-only values; runtime credentials are injected by the platform.
 RUN BUILD_DB_USER="$(node -e 'process.stdout.write(require("node:crypto").randomBytes(12).toString("hex"))')" \
  && BUILD_DB_PASS="$(node -e 'process.stdout.write(require("node:crypto").randomBytes(24).toString("hex"))')" \
- && export DATABASE_URL="postgresql://${BUILD_DB_USER}:${BUILD_DB_PASS}@127.0.0.1:5432/build_only" \
+ && export DATABASE_URL="mysql://${BUILD_DB_USER}:${BUILD_DB_PASS}@127.0.0.1:3306/build_only" \
  && pnpm db:generate \
  && pnpm build
 

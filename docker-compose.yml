@@ -1,23 +1,25 @@
 services:
-  postgres:
-    # Database is enabled for API, combined, and one-off database-tool workflows.
+  mysql:
+    # Local MySQL for API, combined, and one-off database-tool workflows.
     profiles: ["api", "combined", "app", "tools"]
-    image: postgres:16-alpine
-    container_name: connectme-postgres
+    image: mysql:8.4
+    container_name: connectme-mysql
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER in .env}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
-      POSTGRES_DB: ${POSTGRES_DB:?Set POSTGRES_DB in .env}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in .env}
+      MYSQL_USER: ${MYSQL_USER:?Set MYSQL_USER in .env}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Set MYSQL_PASSWORD in .env}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:?Set MYSQL_DATABASE in .env}
     ports:
-      - "${DATABASE_BIND_ADDRESS:-127.0.0.1}:${DATABASE_HOST_PORT:-5432}:5432"
+      - "${DATABASE_BIND_ADDRESS:-127.0.0.1}:${DATABASE_HOST_PORT:-3306}:3306"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - mysql_data:/var/lib/mysql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\""]
-      interval: 3s
-      timeout: 3s
-      retries: 10
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p\"$MYSQL_ROOT_PASSWORD\" --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
 
   api:
     profiles: ["api", "combined", "app"]
@@ -29,15 +31,13 @@ services:
     environment:
       NODE_ENV: production
       PORT: 4000
-      DATABASE_URL: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}"
+      DATABASE_URL: "mysql://${MYSQL_USER}:${MYSQL_PASSWORD}@mysql:3306/${MYSQL_DATABASE}"
       SESSION_SECRET: ${SESSION_SECRET:?Set SESSION_SECRET in .env}
       JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
-      CORS_ORIGIN: ${CORS_ORIGIN:?Set the public web origin(s) in CORS_ORIGIN}
-      QR_CANONICAL_ORIGIN: ${QR_CANONICAL_ORIGIN:?Set QR_CANONICAL_ORIGIN in .env}
       MAX_IMAGE_SIZE_BYTES: ${MAX_IMAGE_SIZE_BYTES:-2097152}
       MAX_BATCH_CODE_COUNT: ${MAX_BATCH_CODE_COUNT:-100}
     depends_on:
-      postgres:
+      mysql:
         condition: service_healthy
     ports:
       - "${API_BIND_ADDRESS:-127.0.0.1}:${API_HOST_PORT:-4000}:4000"
@@ -55,8 +55,6 @@ services:
       context: .
       dockerfile: Dockerfile
       target: web
-      args:
-        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-}
     restart: unless-stopped
     environment:
       NODE_ENV: production
@@ -81,9 +79,9 @@ services:
       target: api
     environment:
       NODE_ENV: production
-      DATABASE_URL: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}"
+      DATABASE_URL: "mysql://${MYSQL_USER}:${MYSQL_PASSWORD}@mysql:3306/${MYSQL_DATABASE}"
     depends_on:
-      postgres:
+      mysql:
         condition: service_healthy
     command: ["pnpm", "db:migrate"]
     restart: "no"
@@ -96,13 +94,13 @@ services:
       target: api
     environment:
       NODE_ENV: production
-      DATABASE_URL: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}"
+      DATABASE_URL: "mysql://${MYSQL_USER}:${MYSQL_PASSWORD}@mysql:3306/${MYSQL_DATABASE}"
       NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
     depends_on:
-      postgres:
+      mysql:
         condition: service_healthy
     command: ["pnpm", "db:bootstrap"]
     restart: "no"
 
 volumes:
-  postgres_data:
+  mysql_data:

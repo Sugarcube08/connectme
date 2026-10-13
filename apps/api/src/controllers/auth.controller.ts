@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import { AuthService } from "../services/auth.service";
 import { config } from "../config/env";
+import { normalizeOrigin } from "../config/origin";
 
 export class AuthController {
   constructor(private authService = new AuthService()) {}
@@ -16,7 +17,8 @@ export class AuthController {
 
   setupBootstrap = async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const result = await this.authService.setupBootstrap(req.body);
+      const publicOrigin = normalizeOrigin(req.get("x-connectme-public-origin")) ?? undefined;
+      const result = await this.authService.setupBootstrap(req.body, publicOrigin);
 
       // Set HTTP-only session cookie for browser
       res.cookie("connectme_session", result.webSession, {

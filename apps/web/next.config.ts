@@ -1,19 +1,28 @@
 import type { NextConfig } from "next";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
+import { parseEnv } from "node:util";
 
-// Next.js searches apps/web/.env* by default. Support the repository's single root
-// .env as well; platform-provided process values take precedence over file values.
-const loadEnvFile = (process as any).loadEnvFile as
-  | ((fileName?: string) => void)
-  | undefined;
-if (loadEnvFile) {
-  for (const candidate of [
-    path.resolve(process.cwd(), ".env"),
-    path.resolve(process.cwd(), "../../.env"),
-  ]) {
-    if (existsSync(candidate)) loadEnvFile(candidate);
+// Next loads apps/web/.env* by default. The shared root .env is a fallback;
+// process/Vercel values win, and blank template placeholders do not mask the root.
+const environmentProvidedByProcess = new Set(Object.keys(process.env));
+
+function loadEnvFallback(fileName: string): void {
+  if (!existsSync(fileName)) return;
+  const fileValues = parseEnv(readFileSync(fileName, "utf8"));
+  for (const [key, value] of Object.entries(fileValues)) {
+    if (environmentProvidedByProcess.has(key)) continue;
+    if (process.env[key] === undefined || process.env[key] === "") {
+      process.env[key] = value;
+    }
   }
+}
+
+for (const candidate of [
+  path.resolve(process.cwd(), ".env"),
+  path.resolve(process.cwd(), "../../.env"),
+]) {
+  loadEnvFallback(candidate);
 }
 
 const nextConfig: NextConfig = {

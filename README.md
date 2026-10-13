@@ -8,8 +8,8 @@ Connect Me is a lightweight, single-use QR contact-capture system for in-person 
 
 - Public pages never disclose the owner's phone, email, vCard, social links, or personal identity.
 - No reciprocal contact exchange, public attendee directory, attendee login, OTP, SMS, or AI service is required.
-- Each access token can be redeemed once. Redemption is atomic in PostgreSQL, including under concurrent requests.
-- Optional profile images are normalized and stored in a separate PostgreSQL `BYTEA` table.
+- Each access token can be redeemed once. Redemption is atomic in MySQL, including under concurrent requests.
+- Optional profile images are normalized and stored in a separate MySQL `LONGBLOB` table.
 - The owner chooses their own administrator username and password during first-time setup. There are no preset admin credentials.
 
 ## Architecture
@@ -20,7 +20,7 @@ apps/
   web/       Next.js — mobile-first public form and administrator dashboard
   mobile/    React Native + Expo — mobile administrator client
 packages/
-  database/  PostgreSQL + Prisma schema and managed migrations
+  database/  MySQL + Prisma schema and managed migrations
   api-client/ Shared typed API client
   contracts/ Shared DTOs and API response types
   validation/Shared Zod validation schemas
@@ -36,51 +36,61 @@ The API remains a separate process even when web and API are presented under one
 
 | Mode | How it works |
 |---|---|
-| Local development | Express on `localhost:4000`, Next.js on `localhost:3000`, PostgreSQL on `localhost:5432`. |
+| Local development | Express on `localhost:4000`, Next.js on `localhost:3000`, MySQL on `localhost:3306`. |
 | Combined public origin | Express and Next.js remain separate processes; Next.js proxies `/api/v1/*`, `/health/*`, and `/api/docs/*` using server-only `API_INTERNAL_URL`. |
-| API-only Compose profile | `--profile api` starts PostgreSQL and Express without starting Next.js. |
+| API-only Compose profile | `--profile api` starts MySQL and Express without starting Next.js. |
 | Web-only Compose profile | `--profile web` starts Next.js without a local API or database; configure `COMPOSE_API_INTERNAL_URL` to an API reachable from the web container. |
-| Combined Compose profile | `--profile combined` starts PostgreSQL, API, and web together. The legacy `app` profile remains available. |
-| Independently hosted services | API and web can be built/deployed as separate targets. Configure the web server's `API_INTERNAL_URL` to the API. For direct browser-to-API requests, set `NEXT_PUBLIC_API_BASE_URL` at web build time and allow the exact web origin in API CORS. |
+| Combined Compose profile | `--profile combined` starts MySQL, API, and web together. The legacy `app` profile remains available. |
+| Independently hosted services | API and web can be built/deployed as separate targets. Configure the web server's `API_INTERNAL_URL` to the API. Browser requests always use the same-origin Next.js proxy; `API_INTERNAL_URL` is server-only and does not need CORS configuration. |
 
-The runtime proxy preserves request bodies, cookies and binary responses. It supports CSV exports and contact images without loading image bytes into the web app.
+The runtime proxy preserves request bodies, cookies and binary responses. It supports CSV exports and contact images without loading image bytes into the web app. The public website origin is learned from the same-origin proxy during first-admin setup and stored in MySQL, so QR codes created later from the mobile admin app point to the website without a separate QR-origin variable.
 
 ## Quick start
 
 ### 1. Configure environment variables
 
+The repository has a root template for Docker Compose/workspace tooling and app-local templates for independent app development:
+
 ```bash
 cp .env.example .env
+cp apps/api/.env.example apps/api/.env
+cp apps/web/.env.example apps/web/.env
 ```
 
-Edit `.env`. Choose a PostgreSQL role name and password; use URL-safe random hex for the password. Generate **different** signing secrets for sessions and mobile JWTs:
+- Root `.env`: Docker Compose variables and monorepo-level database/tool commands.
+- `apps/api/.env`: API runtime, MySQL connection URL, test database URL, and signing keys.
+- `apps/web/.env`: server-only `API_INTERNAL_URL`; the web app does not need database credentials or signing secrets.
+
+Existing process/Vercel environment variables take precedence over file values. Database tooling checks its workspace `.env`, then `apps/api/.env`, then the root `.env`. Keep local `.env` files out of Git.
+
+Edit `.env`. Choose a MySQL application user/password and a distinct root password; use URL-safe random hex for the passwords. Generate **different** signing secrets for sessions and mobile JWTs:
 
 ```bash
-openssl rand -hex 24  # paste output into POSTGRES_PASSWORD
+openssl rand -hex 24  # paste output into MYSQL_ROOT_PASSWORD
 openssl rand -hex 32  # paste output into SESSION_SECRET
 openssl rand -hex 32  # run again; paste output into JWT_SECRET
-openssl rand -hex 24  # optionally use as a test DB password if needed
+openssl rand -hex 24  # paste output into MYSQL_PASSWORD
 ```
 
-Set `DATABASE_URL` to a literal local PostgreSQL URL using your chosen role/password and the database `connectme`. Set `TEST_DATABASE_URL` to a separate database whose name ends in `_test` (for example, `connectme_test`). Do not leave required values blank. Never commit `.env`.
+Set `DATABASE_URL` to a complete MySQL URI, for example `mysql://connectme_user:URL_ENCODED_PASSWORD@localhost:3306/connectme`. Set `TEST_DATABASE_URL` to a separate MySQL database whose name ends in `_test`, for example `mysql://connectme_user:URL_ENCODED_PASSWORD@localhost:3306/connectme_test`. Percent-encode reserved characters in URI components. See `apps/api/.env.example` for format details. Do not leave required values blank. Never commit `.env`.
 
-### 2. Start PostgreSQL and install dependencies
+### 2. Start MySQL and install dependencies
 
 ```bash
-docker compose up -d postgres
+docker compose up -d mysql
 pnpm install
 pnpm db:generate
 pnpm db:migrate
 ```
 
-Create the separate test database once (replace the role name with the one you configured):
+Create the isolated test database once, using the local MySQL root credentials configured in `.env`. Replace `URL_SAFE_ROOT_PASSWORD` in the next command with the value of `MYSQL_ROOT_PASSWORD` (generated hex needs no URL encoding):
 
 ```bash
-docker compose exec postgres sh -lc 'createdb -U "$POSTGRES_USER" connectme_test'
-DATABASE_URL='<your-connectme-test-database-url>' pnpm db:migrate
+docker compose exec mysql sh -lc 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -e "CREATE DATABASE IF NOT EXISTS connectme_test;"'
+DATABASE_URL='mysql://root:URL_SAFE_ROOT_PASSWORD@localhost:3306/connectme_test' pnpm db:migrate
 ```
 
-The second command applies the same Prisma migrations to the isolated test database. Integration tests delete rows and will refuse to run against a database that does not end in `_test` or `_testing`.
+Set `TEST_DATABASE_URL` to that same test database URL before running `pnpm test`. Integration tests delete rows and refuse to run against a database that does not end in `_test` or `_testing`. The test database must be migrated separately from the development database.
 
 ### 3. Provision the first administrator
 
@@ -118,7 +128,7 @@ For a physical phone, set `EXPO_PUBLIC_API_URL` to an API address reachable from
 
 ## Combined Docker deployment
 
-Fill in the required `.env` values and replace local origins with the real public HTTPS origin before production deployment.
+Fill in database credentials and signing secrets in `.env`; use the real public HTTPS website origin for `NEXT_PUBLIC_APP_URL` in production.
 
 ```bash
 # Apply schema migrations before starting the application.
@@ -134,7 +144,7 @@ docker compose --profile combined up --build -d
 To run just one application tier through Compose, use one of these profiles instead of `combined`:
 
 ```bash
-# API + PostgreSQL; no Next.js web container
+# API + MySQL; no Next.js web container
 docker compose --profile api up --build -d api
 
 # Next.js web only; set COMPOSE_API_INTERNAL_URL in .env to an API
@@ -142,7 +152,7 @@ docker compose --profile api up --build -d api
 docker compose --profile web up --build -d web
 ```
 
-By default Compose binds published ports to loopback, so a host reverse proxy can expose HTTPS without directly exposing the containers. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for deployment layouts, exact environment roles, operational commands and security considerations.
+By default Compose binds published ports to loopback, so a host reverse proxy can expose HTTPS without directly exposing the containers. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for deployment layouts and [docs/VERCEL_API.md](docs/VERCEL_API.md) for deploying the API to Vercel with MySQL and auto-derived origins.
 
 ## Tests and checks
 

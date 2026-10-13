@@ -25,9 +25,9 @@ export class ContactRepository {
 
     if (params.search) {
       where.OR = [
-        { fullName: { contains: params.search, mode: "insensitive" } },
-        { organization: { contains: params.search, mode: "insensitive" } },
-        { role: { contains: params.search, mode: "insensitive" } },
+        { fullName: { contains: params.search } },
+        { organization: { contains: params.search } },
+        { role: { contains: params.search } },
       ];
     }
 

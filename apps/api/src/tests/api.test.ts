@@ -17,6 +17,30 @@ beforeAll(async () => {
   await prisma.contactSubmission.deleteMany();
   await prisma.accessCode.deleteMany();
   await prisma.adminUser.deleteMany();
+  await prisma.appSetting.deleteMany({ where: { key: "public-origin" } });
+});
+
+describe("Automatic CORS Origin Resolution", () => {
+  it("allows the request's own HTTPS origin without a configured CORS_ORIGIN", async () => {
+    const res = await request(app)
+      .get("/health/live")
+      .set("Host", "connectme-api.example.test")
+      .set("Origin", "https://connectme-api.example.test");
+
+    expect(res.status).toBe(200);
+    expect(res.headers["access-control-allow-origin"]).toBe("https://connectme-api.example.test");
+    expect(res.headers["access-control-allow-credentials"]).toBe("true");
+  });
+
+  it("rejects an arbitrary third-party browser origin instead of reflecting it", async () => {
+    const res = await request(app)
+      .get("/health/live")
+      .set("Host", "connectme-api.example.test")
+      .set("Origin", "https://untrusted.example.test");
+
+    expect(res.status).toBe(403);
+    expect(res.body.error.code).toBe("CORS_ORIGIN_DENIED");
+  });
 });
 
 describe("Express API MVC - Health Endpoints", () => {
@@ -26,7 +50,7 @@ describe("Express API MVC - Health Endpoints", () => {
     expect(res.body.status).toBe("ok");
   });
 
-  it("GET /health/ready confirms PostgreSQL connection", async () => {
+  it("GET /health/ready confirms MySQL connection", async () => {
     const res = await request(app).get("/health/ready");
     expect(res.status).toBe(200);
     expect(res.body.status).toBe("ok");
@@ -70,6 +94,7 @@ describe("Controlled First-Admin Bootstrap Workflow", () => {
       candidateUsernames.map((candidate) =>
         request(app)
           .post("/api/v1/auth/bootstrap/setup")
+          .set("x-connectme-public-origin", "https://connectme.example.test")
           .send({
             token: bootstrapToken,
             username: candidate,
@@ -96,6 +121,8 @@ describe("Controlled First-Admin Bootstrap Workflow", () => {
     // Check bootstrap status is now closed
     const statusAfter = await request(app).get("/api/v1/auth/bootstrap/status");
     expect(statusAfter.body.data.isBootstrapPending).toBe(false);
+    const publicOriginSetting = await prisma.appSetting.findUnique({ where: { key: "public-origin" } });
+    expect((publicOriginSetting?.value as { origin?: string })?.origin).toBe("https://connectme.example.test");
 
     // Replay attack: attempting to reuse bootstrap token fails
     const replayRes = await request(app)
@@ -152,6 +179,7 @@ describe("Core Operations: Code Generation, Atomic Single-Use Redemption & Concu
 
     expect(genRes.status).toBe(201);
     const code = genRes.body.data;
+    expect(code.url).toBe(`https://connectme.example.test/${code.token}`);
     expect(code.token).toBeDefined();
     expect(code.token.length).toBe(22);
     expect(code.qrDataUrl.startsWith("data:image/png;base64,")).toBe(true);

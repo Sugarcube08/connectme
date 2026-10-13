@@ -66,7 +66,7 @@ export class CodeRepository {
     }
 
     if (params.search) {
-      where.label = { contains: params.search, mode: "insensitive" };
+      where.label = { contains: params.search };
     }
 
     const [items, total] = await Promise.all([

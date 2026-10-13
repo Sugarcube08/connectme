@@ -1,18 +1,24 @@
 import { createHash, randomBytes } from "node:crypto";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
+import { parseEnv } from "node:util";
 
 async function loadEnvironment(): Promise<void> {
-  const loadEnvFile = (process as any).loadEnvFile as
-    | ((fileName?: string) => void)
-    | undefined;
-  if (!loadEnvFile) return;
+  const environmentProvidedByProcess = new Set(Object.keys(process.env));
 
   for (const candidate of [
     path.resolve(process.cwd(), ".env"),
+    path.resolve(process.cwd(), "../../apps/api/.env"),
     path.resolve(process.cwd(), "../../.env"),
   ]) {
-    if (existsSync(candidate)) loadEnvFile(candidate);
+    if (!existsSync(candidate)) continue;
+    const fileValues = parseEnv(readFileSync(candidate, "utf8"));
+    for (const [key, value] of Object.entries(fileValues)) {
+      if (environmentProvidedByProcess.has(key)) continue;
+      if (process.env[key] === undefined || process.env[key] === "") {
+        process.env[key] = value;
+      }
+    }
   }
 }
 

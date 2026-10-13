@@ -2,7 +2,7 @@
 
 ## Current architecture
 
-Connect Me is a pnpm/Turborepo TypeScript monorepo. Express is the authoritative REST API, Next.js is the web client and same-origin runtime proxy, React Native/Expo is the mobile admin client, and Prisma manages PostgreSQL schema migrations.
+Connect Me is a pnpm/Turborepo TypeScript monorepo. Express is the authoritative REST API, Next.js is the web client and same-origin runtime proxy, React Native/Expo is the mobile admin client, and Prisma manages MySQL schema migrations.
 
 - `apps/api`: Express MVC, auth, QR codes, contact collection/CRM, image retrieval, health endpoints, Swagger UI.
 - `apps/web`: Next.js public contact form, setup flow, dashboard and runtime API proxy.
@@ -12,31 +12,31 @@ Connect Me is a pnpm/Turborepo TypeScript monorepo. Express is the authoritative
 
 ## Deployment modes
 
-**Local development:** API `localhost:4000`; web `localhost:3000`; PostgreSQL `localhost:5432`.
+**Local development:** API `localhost:4000`; web `localhost:3000`; MySQL `localhost:3306`.
 
 **One public origin:** Keep API and web as separate processes. Next.js proxies `/api/v1/*`, `/health/*`, and `/api/docs/*` to the Express API using runtime, server-only `API_INTERNAL_URL`. This is the default combined public deployment mode.
 
-**Docker Compose profiles:** Use `docker compose --profile api up --build -d api` for API + PostgreSQL only, `docker compose --profile web up --build -d web` for a web container whose API is hosted elsewhere, or `docker compose --profile combined up --build -d` for both app services together. In web-only mode, set `COMPOSE_API_INTERNAL_URL` to an API URL reachable from inside the web container. The legacy `app` profile still launches both app services.
+**Docker Compose profiles:** Use `docker compose --profile api up --build -d api` for API + MySQL only, `docker compose --profile web up --build -d web` for a web container whose API is hosted elsewhere, or `docker compose --profile combined up --build -d` for both app services together. In web-only mode, set `COMPOSE_API_INTERNAL_URL` to an API URL reachable from inside the web container. The legacy `app` profile still launches both app services.
 
-**Independently hosted services:** Build/deploy `apps/api` and `apps/web` independently. Configure `API_INTERNAL_URL` on the web service to the API origin/private service address. For direct browser-to-API calls across origins, set `NEXT_PUBLIC_API_BASE_URL` at web build time and allow the exact web origin in API `CORS_ORIGIN`. Native mobile uses `EXPO_PUBLIC_API_URL`.
+**Independently hosted services:** Build/deploy `apps/api` and `apps/web` independently. Configure the server-only `API_INTERNAL_URL` on the web service to the API origin/private service address; browser requests use the Next.js same-origin proxy. The API derives same-origin CORS from the request host and Vercel system domains; it does not reflect arbitrary browser origins. Native mobile uses `EXPO_PUBLIC_API_URL` and normally sends no browser Origin header.
 
 ## Environment configuration
 
-1. Copy `.env.example` to `.env`.
-2. Choose `POSTGRES_USER`, `POSTGRES_PASSWORD`, and `POSTGRES_DB`.
+1. Copy the root `.env.example` for Compose/tooling. For independent app processes, copy `apps/api/.env.example` to `apps/api/.env` and `apps/web/.env.example` to `apps/web/.env`.
+2. Choose `MYSQL_ROOT_PASSWORD`, `MYSQL_USER`, `MYSQL_PASSWORD`, and `MYSQL_DATABASE`.
 3. Set `DATABASE_URL` to a literal URL usable from the host process (usually hostname `localhost`).
 4. Set `TEST_DATABASE_URL` to a separate database ending in `_test`.
 5. Generate distinct secrets using `openssl rand -hex 32` and set `SESSION_SECRET` and `JWT_SECRET`.
-6. Set `CORS_ORIGIN`, `QR_CANONICAL_ORIGIN`, and `NEXT_PUBLIC_APP_URL` to the actual origins for the environment.
+6. Set `NEXT_PUBLIC_APP_URL` for the bootstrap CLI's setup link. `CORS_ORIGIN` and `QR_CANONICAL_ORIGIN` are no longer required or read. Browser traffic should use the same-origin web proxy; `NEXT_PUBLIC_API_BASE_URL` has been removed; all browser API traffic goes through the same-origin proxy.
 
-There are no configured administrator credentials and no production fallback signing keys. The API fails fast if its database URL or signing secrets are missing/too short. Production also requires explicit CORS and QR origins.
+There are no configured administrator credentials and no production fallback signing keys. The API fails fast if its database URL or signing secrets are missing/too short. CORS derives same-origin/Vercel hosts automatically. QR generation uses the public origin from the Next.js proxy, then Vercel deployment metadata/request host as a fallback.
 
-Do not commit `.env`. Environment examples must contain no real credentials. Database passwords should use URL-safe characters, such as random hex, when embedded in `DATABASE_URL`.
+Do not commit `.env`. Environment examples must contain no real credentials. Database passwords should use URL-safe characters, such as random hex, when embedded in `DATABASE_URL`. Prisma MySQL URLs must use the form `mysql://USER:PASSWORD@HOST:3306/DATABASE`. Special characters in usernames/passwords and other URL components must be percent-encoded (for example, `@` becomes `%40`, `:` becomes `%3A`, `%` becomes `%25`). The API validates the scheme, credentials, host, database path, port, and percent-encoding before starting.
 
 ## Local setup
 
 ```bash
-docker compose up -d postgres
+docker compose up -d mysql
 pnpm install
 pnpm db:generate
 pnpm db:migrate
@@ -50,7 +50,7 @@ The bootstrap command prints a single-use setup token in the terminal. Enter it 
 
 ## Tests
 
-Integration tests are destructive to the selected database. Set `TEST_DATABASE_URL` to an isolated PostgreSQL database whose name ends in `_test` or `_testing`, and apply migrations to that database before running `pnpm test`. The Vitest setup refuses to run against an ordinary database and generates ephemeral signing secrets when needed.
+Integration tests are destructive to the selected database. Set `TEST_DATABASE_URL` to an isolated MySQL database whose name ends in `_test` or `_testing`, and apply migrations to that database before running `pnpm test`. The Vitest setup refuses to run against an ordinary database and generates ephemeral signing secrets when needed.
 
 ```bash
 pnpm test
@@ -61,11 +61,11 @@ pnpm build
 
 ## Docker deployment
 
-See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for combined and independent deployments, environment maps, bootstrap/migration procedures, and reverse-proxy guidance.
+See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for combined and independent deployments and [docs/VERCEL_API.md](docs/VERCEL_API.md) for the Vercel API setup.
 
 ## Operational invariants
 
-- Express is the single authority for business rules and database access. Web and mobile never connect directly to PostgreSQL.
+- Express is the single authority for business rules and database access. Web and mobile never connect directly to MySQL.
 - Every public QR token is one-use; concurrent submissions may create only one contact record.
 - Initial administrator bootstrap is tokenized, has no configured identity, is atomic, and is permanently locked after completion.
 - Profile-image binary data lives in `submission_images`, separate from the listable contact rows.

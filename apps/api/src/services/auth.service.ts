@@ -40,7 +40,8 @@ export class AuthService {
   }
 
   async setupBootstrap(
-    input: BootstrapSetupInput
+    input: BootstrapSetupInput,
+    publicOrigin?: string
   ): Promise<{ user: AdminUserDTO; token: string; webSession: string }> {
     if (await this.userRepo.findActiveAdmin()) {
       throw new ForbiddenError(
@@ -79,6 +80,7 @@ export class AuthService {
         username,
         passwordHash,
         displayName: input.displayName,
+        publicOrigin,
       });
     } catch (error) {
       if (typeof error === "object" && error !== null && "code" in error && error.code === "P2002") {

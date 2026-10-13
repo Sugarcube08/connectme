@@ -16,8 +16,8 @@ export class TokenService {
     return createHash("sha256").update(token).digest("hex");
   }
 
-  getCanonicalUrl(token: string): string {
-    return `${config.QR_CANONICAL_ORIGIN.replace(/\/+$/, "")}/${token}`;
+  getCanonicalUrl(token: string, publicOrigin: string): string {
+    return `${publicOrigin.replace(/\/+$/, "")}/${token}`;
   }
 
   async generateQr(url: string): Promise<string> {
@@ -35,10 +35,11 @@ export class TokenService {
   async createSingle(options: {
     label?: string;
     expiresAt?: string | null;
+    publicOrigin: string;
   }): Promise<GeneratedCodeDetail> {
     const token = this.generateToken();
     const tokenHash = this.hashToken(token);
-    const url = this.getCanonicalUrl(token);
+    const url = this.getCanonicalUrl(token, options.publicOrigin);
     const qrDataUrl = await this.generateQr(url);
 
     const record = await this.codeRepo.create({
@@ -59,7 +60,7 @@ export class TokenService {
 
   async createBatch(
     count: number,
-    options: { label?: string; expiresAt?: string | null }
+    options: { label?: string; expiresAt?: string | null; publicOrigin: string }
   ): Promise<GeneratedCodeDetail[]> {
     const safeCount = Math.min(Math.max(1, count), config.MAX_BATCH_CODE_COUNT);
     const results: GeneratedCodeDetail[] = [];
@@ -67,7 +68,7 @@ export class TokenService {
     for (let i = 0; i < safeCount; i++) {
       const token = this.generateToken();
       const tokenHash = this.hashToken(token);
-      const url = this.getCanonicalUrl(token);
+      const url = this.getCanonicalUrl(token, options.publicOrigin);
       const batchLabel = options.label
         ? safeCount > 1
           ? `${options.label} #${i + 1}`

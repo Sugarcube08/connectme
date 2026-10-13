@@ -6,7 +6,7 @@ import path from "node:path";
 import fs from "node:fs";
 import YAML from "yamljs";
 import swaggerUi from "swagger-ui-express";
-import { config } from "./config/env";
+import { isAllowedCorsOrigin } from "./config/origin";
 import { healthRoutes } from "./routes/health.routes";
 import { publicRoutes } from "./routes/public.routes";
 import { authRoutes } from "./routes/auth.routes";
@@ -23,21 +23,24 @@ export function createApp(): Express {
     })
   );
 
-  // Credentialed CORS must use an explicit origin allow-list, never "*".
-  const allowedOrigins = config.CORS_ORIGIN.split(",").map((origin) => origin.trim()).filter(Boolean);
-  app.use(
-    cors({
-      origin: (origin, callback) => {
-        // Native app clients and server-to-server requests usually omit Origin.
-        if (!origin || allowedOrigins.includes(origin)) {
-          callback(null, true);
-          return;
-        }
-        callback(new Error("Origin is not allowed by Connect Me CORS policy."));
-      },
-      credentials: true,
-    })
-  );
+  // CORS is inferred from the request host and Vercel system domains. The
+  // Next.js server-side proxy strips Origin, and native clients usually omit it.
+  app.use((req, res, next) => {
+    const origin = req.get("origin");
+    if (!origin) return next();
+
+    if (!isAllowedCorsOrigin(origin, req)) {
+      return res.status(403).json({
+        success: false,
+        error: {
+          code: "CORS_ORIGIN_DENIED",
+          message: "This browser origin is not allowed. Use the same-origin web proxy.",
+        },
+      });
+    }
+
+    return cors({ origin, credentials: true })(req, res, next);
+  });
 
   app.use(cookieParser());
   app.use(express.json({ limit: "2mb" }));
