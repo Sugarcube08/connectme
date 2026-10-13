@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { z } from "zod";
+import { isValidMySqlUrl } from "./mysql-url";
 
 // Support workspace-local .env files and a shared monorepo-root .env.
 // Values already present in the process environment take precedence.
@@ -21,7 +22,10 @@ const EnvSchema = z.object({
   DATABASE_URL: z
     .string()
     .min(1, "DATABASE_URL must be provided; there are no default database credentials.")
-    .refine((value) => value.startsWith("mysql://"), "DATABASE_URL must be a MySQL URL beginning with mysql://."),
+    .refine(
+      isValidMySqlUrl,
+      "DATABASE_URL must be mysql://USER:PASSWORD@HOST:3306/DATABASE; percent-encode reserved characters in URL components."
+    ),
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   // No fallback values: generate independent random values per environment.
   SESSION_SECRET: z.string().min(32, "SESSION_SECRET must be at least 32 characters."),
