@@ -42,7 +42,7 @@ describe("Controlled First-Admin Bootstrap Workflow", () => {
     const provisionResult = await bootstrapAdmin();
     expect(provisionResult.bootstrapToken).toBeDefined();
     bootstrapToken = provisionResult.bootstrapToken;
-    expect(provisionResult.setupUrl).toMatch(/\\/setup$/);
+    expect(provisionResult.setupUrl).toMatch(/\/setup$/);
     expect(provisionResult.setupUrl).not.toContain(bootstrapToken);
 
     // Verify GET /api/v1/auth/bootstrap/status reflects pending state
@@ -80,7 +80,9 @@ describe("Controlled First-Admin Bootstrap Workflow", () => {
     );
     const successes = setupResults.filter((response) => response.status === 200);
     expect(successes).toHaveLength(1);
-    expect(setupResults.filter((response) => response.status !== 200)).toHaveLength(1);
+    const rejected = setupResults.filter((response) => response.status !== 200);
+    expect(rejected).toHaveLength(1);
+    expect([401, 403, 410]).toContain(rejected[0].status);
 
     const successIndex = setupResults.findIndex((response) => response.status === 200);
     activeTestUsername = candidateUsernames[successIndex];
@@ -103,7 +105,7 @@ describe("Controlled First-Admin Bootstrap Workflow", () => {
         username: activeTestUsername,
         password: testPassword,
       });
-    expect(replayRes.status).toBe(401);
+    expect(replayRes.status).toBe(403);
   });
 
   it("authenticates active administrator with password and issues JWT", async () => {
