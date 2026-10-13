@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import { TokenService } from "../services/token.service";
 import { NotFoundError } from "../errors/app-error";
+import { resolvePublicOrigin } from "../config/origin";
 
 export class CodesController {
   constructor(private tokenService = new TokenService()) {}
@@ -36,13 +37,13 @@ export class CodesController {
       const expiresAt = req.body.expiresAt ? String(req.body.expiresAt) : null;
 
       if (count > 1) {
-        const codes = await this.tokenService.createBatch(count, { label, expiresAt });
+        const codes = await this.tokenService.createBatch(count, { label, expiresAt, publicOrigin: resolvePublicOrigin(req) });
         return res.status(201).json({
           success: true,
           data: { count: codes.length, codes },
         });
       } else {
-        const code = await this.tokenService.createSingle({ label, expiresAt });
+        const code = await this.tokenService.createSingle({ label, expiresAt, publicOrigin: resolvePublicOrigin(req) });
         return res.status(201).json({
           success: true,
           data: code,
