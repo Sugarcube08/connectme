@@ -76,7 +76,8 @@ pnpm db:migrate
 Create the separate test database once (replace the role name with the one you configured):
 
 ```bash
-docker compose exec mysql sh -lc "mysql -uroot -p\"\$MYSQL_ROOT_PASSWORD\" -e \"CREATE DATABASE IF NOT EXISTS connectme_test; GRANT ALL PRIVILEGES ON connectme_test.* TO '\''\$MYSQL_USER'\''@'\''%'\'';\""
+docker compose exec mysql sh -lc 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -e "CREATE DATABASE IF NOT EXISTS connectme_test;"'
+docker compose exec mysql sh -lc 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -e "GRANT ALL PRIVILEGES ON connectme_test.* TO '\''${MYSQL_USER}'\''@'\''%'\'';"'
 DATABASE_URL='mysql://<user>:<password>@localhost:3306/connectme_test' pnpm db:migrate
 ```
 
