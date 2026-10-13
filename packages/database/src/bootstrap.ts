@@ -10,6 +10,7 @@ async function loadEnvironment(): Promise<void> {
 
   for (const candidate of [
     path.resolve(process.cwd(), ".env"),
+    path.resolve(process.cwd(), "../../apps/api/.env"),
     path.resolve(process.cwd(), "../../.env"),
   ]) {
     if (existsSync(candidate)) loadEnvFile(candidate);
