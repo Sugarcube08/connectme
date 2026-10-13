@@ -2,6 +2,7 @@
   "name": "@connectme/web",
   "version": "1.0.0",
   "private": true,
+  "packageManager": "pnpm@12.11.2",
   "scripts": {
     "dev": "next dev -p 3000",
     "prebuild": "pnpm exec turbo run build --filter=@connectme/web^...",

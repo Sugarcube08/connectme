@@ -1,6 +1,7 @@
 {
   "name": "@connectme/mobile",
   "version": "1.0.0",
+  "packageManager": "pnpm@12.11.2",
   "main": "expo-router/entry",
   "scripts": {
     "start": "expo start",

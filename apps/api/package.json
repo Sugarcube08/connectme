@@ -2,6 +2,7 @@
   "name": "@connectme/api",
   "version": "1.0.0",
   "private": true,
+  "packageManager": "pnpm@12.11.2",
   "main": "dist/server.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",
