@@ -77,7 +77,7 @@ Create the isolated test database once, using the local MySQL root credentials c
 
 ```bash
 docker compose exec mysql sh -lc 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -e "CREATE DATABASE IF NOT EXISTS connectme_test;"'
-TEST_DATABASE_URL='mysql://root:<root-password>@localhost:3306/connectme_test' pnpm db:migrate
+DATABASE_URL='mysql://root:<root-password>@localhost:3306/connectme_test' pnpm db:migrate
 ```
 
 Set `TEST_DATABASE_URL` to that same test database URL before running `pnpm test`. Integration tests delete rows and refuse to run against a database that does not end in `_test` or `_testing`. The test database must be migrated separately from the development database.
