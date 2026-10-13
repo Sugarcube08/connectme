@@ -39,8 +39,8 @@ if (testDatabaseUrl) {
 }
 
 process.env.NODE_ENV = "test";
-process.env.SESSION_SECRET ??= randomBytes(32).toString("hex");
-process.env.JWT_SECRET ??= randomBytes(32).toString("hex");
+if (!process.env.SESSION_SECRET?.trim()) process.env.SESSION_SECRET = randomBytes(32).toString("hex");
+if (!process.env.JWT_SECRET?.trim()) process.env.JWT_SECRET = randomBytes(32).toString("hex");
 
 export default defineConfig({
   test: {
