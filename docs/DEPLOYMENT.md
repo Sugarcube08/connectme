@@ -30,6 +30,7 @@ Use a URL-safe password such as random hex for PostgreSQL. `DATABASE_URL` must b
 | `QR_CANONICAL_ORIGIN` | Required in production | API | Public origin used to construct QR URLs. |
 | `NEXT_PUBLIC_APP_URL` | Yes for bootstrap | Bootstrap CLI | Public web origin; setup links end in `/setup` and do not include the setup token. |
 | `API_INTERNAL_URL` | Yes when web is separate from API | Next.js server | Server-only URL of Express. It is never placed in browser code. |
+| `COMPOSE_API_INTERNAL_URL` | Required for web-only Compose deployments | Docker Compose / web container | Optional override passed to the web container as `API_INTERNAL_URL`; leave blank for combined mode, where the private Compose service URL is used. |
 | `NEXT_PUBLIC_API_BASE_URL` | Optional | Web browser bundle | Public API origin for direct cross-origin browser requests. Leave blank for the recommended same-origin web proxy. This is a build-time public value, not a secret. |
 | `EXPO_PUBLIC_API_URL` | For device/mobile release | Expo app | Public API origin reachable from the mobile device. |
 
@@ -53,17 +54,35 @@ docker compose --profile tools run --rm bootstrap
 
 The bootstrap command prints a 256-bit one-time token to its terminal output. Open the printed `/setup` URL, paste the token manually, and choose the admin username and password. Do not post the token in an issue, URL, or shared log.
 
-Then launch the API and web services:
+Then launch the API and web services together:
 
 ```bash
-docker compose --profile app up --build -d
-docker compose --profile app ps
+docker compose --profile combined up --build -d
+docker compose --profile combined ps
 docker compose logs --tail=100 api web
 ```
+
+The legacy `app` profile remains an alias for the combined API + web deployment.
 
 By default, Compose binds API and web ports to loopback. Put a TLS-terminating reverse proxy (for example, Nginx or Caddy) in front of port 3000 for the public website. If a separately addressed API is needed for the mobile client, expose Express behind an API hostname, such as `https://api.example.com`, and set `EXPO_PUBLIC_API_URL` in the mobile build to that origin.
 
 Migrations are deliberately not run on API startup. Apply migrations as a deployment step before rolling out application instances.
+
+### Run only one application tier with Compose
+
+The Compose profiles are designed to avoid starting unrelated services:
+
+```bash
+# API + PostgreSQL only; no Next.js process.
+docker compose --profile api up --build -d api
+
+# Next.js only; API and PostgreSQL must already be hosted elsewhere.
+docker compose --profile web up --build -d web
+```
+
+For the web-only command, set `COMPOSE_API_INTERNAL_URL` in the deployment environment or `.env` to an HTTP(S) URL that the web container can reach. For example, use the private service URL of an API hosted in the same network or the API's public HTTPS origin. Leave it blank for the combined profile, where Compose uses `http://api:4000` on its internal network. Do not set it to `localhost:4000` for a web container unless the API actually runs inside that same container.
+
+These profiles let you run API, web, or both from the same repository and Dockerfile while keeping Express as the authoritative API. A combined public origin is still achieved by placing the public reverse proxy in front of Next.js; the API and web are not merged into one process.
 
 ## 3. Independently deployed API and web services
 
