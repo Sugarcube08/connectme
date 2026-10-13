@@ -1,0 +1,88 @@
+# Deploy the Connect Me API to Vercel
+
+This guide covers deploying `apps/api` as the first Vercel project. The Next.js web app can remain a separate project. The Express API stays authoritative for business logic and database access.
+
+## 1. Configure a managed MySQL database
+
+Provision a managed MySQL database through your chosen provider. Use a **new, empty database** for the MySQL migration baseline in this repository. Do not point this migration history at an old PostgreSQL database.
+
+Set the API project's production environment variables in Vercel:
+
+| Variable | Required | Value |
+|---|---:|---|
+| `DATABASE_URL` | Yes | Provider-issued MySQL URL, `mysql://user:password@host:3306/database`; use the provider's recommended pooled URL for serverless runtime when available. |
+| `SESSION_SECRET` | Yes | Unique random secret, at least 32 characters. |
+| `JWT_SECRET` | Yes | A different unique random secret, at least 32 characters. |
+| `NODE_ENV` | Recommended | `production`. |
+| `MAX_IMAGE_SIZE_BYTES` | Optional | Defaults to `2097152` (2 MiB). |
+| `MAX_BATCH_CODE_COUNT` | Optional | Defaults to `100`. |
+
+Generate independent signing keys locally:
+
+```bash
+openssl rand -hex 32
+openssl rand -hex 32
+```
+
+Paste the outputs into Vercel's Environment Variables settings. Never add real values to `.env.example`, commit them, or expose them as `NEXT_PUBLIC_*` variables.
+
+### Removed origin variables
+
+Do **not** configure `CORS_ORIGIN` or `QR_CANONICAL_ORIGIN`. The API no longer reads either variable. Remove existing copies from the Vercel project's Production, Preview, and Development environment variable sets as appropriate.
+
+- **CORS:** Same-origin browser requests are permitted when the origin matches the request host; Vercel deployment domains are derived from Vercel's system environment variables. Unknown third-party browser origins are rejected rather than reflected. Native and server-to-server requests with no `Origin` header do not need a browser CORS grant.
+- **QR URLs:** The Next.js proxy sends the public web origin in a server-generated `X-ConnectMe-Public-Origin` header. The API falls back to Vercel deployment metadata or the request host when there is no proxy-provided origin.
+
+For the web dashboard, keep the browser API base URL empty so browser requests go through the same-origin Next.js proxy. This avoids needing a configured cross-origin allow-list.
+
+## 2. Build and deploy the API project
+
+Connect `Sugarcube08/connectme` to Vercel and configure the project to build the API workspace (root directory `apps/api`, with the monorepo workspace/packages available to the build). Ensure the deployment build generates Prisma Client against the checked-in MySQL schema before bundling the API. The exact Vercel build/root-directory settings depend on whether your project is configured to build from the workspace root or the API subdirectory; do not deploy until the build includes `packages/database` and its generated Prisma client.
+
+After adding or changing Vercel environment variables, create a new deployment. Existing deployments do not inherit environment-variable changes retroactively.
+
+## 3. Apply the MySQL schema
+
+Run the reviewed Prisma migration against the selected MySQL database from an operator-controlled environment with the repository dependencies installed and `DATABASE_URL` set to that database:
+
+```bash
+pnpm install
+pnpm db:generate
+pnpm db:migrate:deploy
+```
+
+Migrations are not run automatically when an API request starts. Apply the baseline to a fresh MySQL database before using the application. The prior PostgreSQL migration SQL was removed because migrations are database-provider-specific. Any data already stored in PostgreSQL needs a separately planned export/import; changing the connection string is not a data migration.
+
+## 4. Create the first administrator
+
+After the Next.js web project is available, run the bootstrap CLI against the **same production MySQL database**. Set `NEXT_PUBLIC_APP_URL` for the CLI to your public web origin if it does not already match the environment where the command is being run:
+
+```bash
+NEXT_PUBLIC_APP_URL=https://<your-web-domain> pnpm db:bootstrap
+```
+
+Copy the one-time token from the terminal into the web app's `/setup` form. The CLI does not create an administrator password or username. Never place the token in an issue, URL, source control, or shared logs.
+
+If the API is being deployed before the web project exists, keep the database initialized but defer bootstrap until you can access the setup form on the web app.
+
+## 5. Smoke tests
+
+After deployment, replace the hostname below with the API's actual Vercel domain:
+
+- `/health/live` — confirms the function responds.
+- `/health/ready` — confirms the API can connect to MySQL.
+- `/api/docs` — Swagger UI, if the OpenAPI definition is included in the deployed bundle.
+
+If liveness succeeds but readiness returns `503`, verify the MySQL URL, provider network/access settings, and applied migration status.
+
+## 6. Connect the web project later
+
+In the separate Next.js Vercel project, set this **server-only** variable:
+
+```dotenv
+API_INTERNAL_URL=https://<your-api-vercel-domain>
+```
+
+Keep the browser client on the same-origin proxy and do not set a direct public API URL. The web proxy removes browser CORS metadata and sends its own public origin so generated QR codes point to the web app, not to the API project's domain.
+
+Native mobile can call the API's public Vercel domain through `EXPO_PUBLIC_API_URL`. Since a direct mobile request has no web-origin context, QR codes created directly from mobile fall back to the API's Vercel production domain. If mobile-generated QR codes must use a separate web domain, send code-generation requests through the web proxy or introduce an explicit, validated app-origin mechanism in a later change.
