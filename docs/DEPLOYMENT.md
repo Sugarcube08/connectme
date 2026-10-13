@@ -101,7 +101,7 @@ Supply the API function with production values for `NODE_ENV`, `DATABASE_URL`, `
 
 ### Web service
 
-Supply the web container with `API_INTERNAL_URL` pointing to the deployed API origin or private service address and `NEXT_PUBLIC_APP_URL` pointing to the public website origin. The browser always uses the same-origin proxy. In this arrangement API and web are separately deployed but the browser still talks only to the web origin. QR links use the origin provided by the web proxy; if an authenticated mobile client creates codes directly with no web-origin context, the API falls back to Vercel's stable production domain/request host.
+Supply the web container with `API_INTERNAL_URL` pointing to the deployed API origin or private service address and `NEXT_PUBLIC_APP_URL` pointing to the public website origin. The browser always uses the same-origin proxy. In this arrangement API and web are separately deployed but the browser still talks only to the web origin. QR links use the origin provided by the web proxy. First-admin setup stores that website origin in MySQL, so later authenticated mobile code generation uses the same web origin even when the mobile request has no browser Origin header. Vercel deployment metadata/request host remains the fallback if setup did not provide an origin.
 
 Browser JavaScript is intentionally not configured for direct cross-origin API requests. It calls the same-origin Next.js proxy, which strips browser Origin metadata before forwarding to Express and supplies the public origin for QR generation. This allows the API and web to live in different Vercel projects without maintaining a fixed CORS allow-list.
 
