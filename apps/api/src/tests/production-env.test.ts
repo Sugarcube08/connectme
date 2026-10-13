@@ -15,7 +15,7 @@ describe("production environment configuration", () => {
     vi.stubEnv("QR_CANONICAL_ORIGIN", undefined);
     vi.resetModules();
 
-    const { config } = await import("../config/env");
+    const { config } = await import("../config/env.js");
 
     expect(config.NODE_ENV).toBe("production");
     expect(config).not.toHaveProperty("CORS_ORIGIN");
