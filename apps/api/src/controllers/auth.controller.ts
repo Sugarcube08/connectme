@@ -35,8 +35,8 @@ export class AuthController {
       success: true,
       data: {
         user: result.user,
-        token: result.token,
-        ...(isMobileClient(req) ? { refreshToken: result.refreshToken } : {}),
+        // Browser sessions use HTTP-only cookies; never expose bearer credentials to browser JavaScript.
+        ...(isMobileClient(req) ? { token: result.token, refreshToken: result.refreshToken } : {}),
       },
     });
   }
