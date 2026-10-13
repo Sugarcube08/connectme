@@ -155,7 +155,8 @@ describe("Controlled First-Admin Bootstrap Workflow", () => {
       });
     expect(loginRes.status).toBe(200);
     expect(loginRes.body.data.token).toBeUndefined();
-    const loginCookies = loginRes.headers["set-cookie"] as string[];
+    const rawSetCookies = loginRes.headers["set-cookie"];
+    const loginCookies = Array.isArray(rawSetCookies) ? rawSetCookies : [rawSetCookies];
     expect(loginCookies).toBeDefined();
     expect(loginCookies.some((cookie) => cookie.startsWith("connectme_session=") && /HttpOnly/i.test(cookie))).toBe(true);
     expect(loginCookies.some((cookie) => cookie.startsWith("connectme_refresh=") && /HttpOnly/i.test(cookie))).toBe(true);
