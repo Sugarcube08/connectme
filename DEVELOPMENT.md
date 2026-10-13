@@ -12,7 +12,7 @@ Connect Me is a pnpm/Turborepo TypeScript monorepo. Express is the authoritative
 
 ## Deployment modes
 
-**Local development:** API `localhost:4000`; web `localhost:3000`; MySQL `localhost:5432`.
+**Local development:** API `localhost:4000`; web `localhost:3000`; MySQL `localhost:3306`.
 
 **One public origin:** Keep API and web as separate processes. Next.js proxies `/api/v1/*`, `/health/*`, and `/api/docs/*` to the Express API using runtime, server-only `API_INTERNAL_URL`. This is the default combined public deployment mode.
 
@@ -27,7 +27,7 @@ Connect Me is a pnpm/Turborepo TypeScript monorepo. Express is the authoritative
 3. Set `DATABASE_URL` to a literal URL usable from the host process (usually hostname `localhost`).
 4. Set `TEST_DATABASE_URL` to a separate database ending in `_test`.
 5. Generate distinct secrets using `openssl rand -hex 32` and set `SESSION_SECRET` and `JWT_SECRET`.
-6. Set `NEXT_PUBLIC_APP_URL` for the bootstrap CLI's setup link. `CORS_ORIGIN` and `QR_CANONICAL_ORIGIN` are no longer required or read.
+6. Set `NEXT_PUBLIC_APP_URL` for the bootstrap CLI's setup link. `CORS_ORIGIN` and `QR_CANONICAL_ORIGIN` are no longer required or read. Browser traffic should use the same-origin web proxy; `NEXT_PUBLIC_API_BASE_URL` is not used.
 
 There are no configured administrator credentials and no production fallback signing keys. The API fails fast if its database URL or signing secrets are missing/too short. CORS derives same-origin/Vercel hosts automatically. QR generation uses the public origin from the Next.js proxy, then Vercel deployment metadata/request host as a fallback.
 
