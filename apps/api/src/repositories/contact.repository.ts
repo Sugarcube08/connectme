@@ -48,10 +48,21 @@ export class ContactRepository {
     return { items, total };
   }
 
-  async update(id: string, data: { followUpStatus?: FollowUpStatus; discussionNotes?: string }) {
-    return prisma.contactSubmission.update({
-      where: { id },
+  async update(
+    id: string,
+    adminUserId: string,
+    data: { followUpStatus?: FollowUpStatus; discussionNotes?: string }
+  ) {
+    // Enforce ownership in the mutation itself rather than relying only on a
+    // preceding read, so every write is owner-scoped and fails closed.
+    const result = await prisma.contactSubmission.updateMany({
+      where: { id, ...ownerFilter(adminUserId) },
       data,
+    });
+    if (result.count !== 1) return null;
+
+    return prisma.contactSubmission.findFirst({
+      where: { id, ...ownerFilter(adminUserId) },
       include: {
         accessCode: { select: { label: true } },
         image: { select: { id: true, mime: true, size: true } },
