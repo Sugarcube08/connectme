@@ -51,7 +51,7 @@ export class ConnectMeApiClient {
     if (this.clientType) headers.set("X-ConnectMe-Client", this.clientType);
     if (this.getToken) {
       const savedToken = await this.getToken();
-      const token = savedToken || freshToken;
+      const token = freshToken || savedToken;
       if (token) headers.set("Authorization", `Bearer ${token}`);
     }
     return fetch(`${this.baseUrl}/api/v1${endpoint}`, {
@@ -61,7 +61,7 @@ export class ConnectMeApiClient {
     });
   }
 
-  private async refreshAccessToken(): Promise<string | null> {
+  private async refreshAccessToken(): Promise<{ refreshed: boolean; token?: string }> {
     try {
       const refreshToken = await this.getRefreshToken?.();
       const headers = new Headers({ "Content-Type": "application/json" });
@@ -73,17 +73,24 @@ export class ConnectMeApiClient {
         ...(refreshToken ? { body: JSON.stringify({ refreshToken }) } : {}),
       });
       const result = await response.json();
-      if (!response.ok || result?.success !== true || typeof result?.data?.token !== "string") return null;
+      if (!response.ok || result?.success !== true) return { refreshed: false };
 
-      if (this.clientType === "mobile" && typeof result.data.refreshToken === "string") {
+      if (this.clientType === "mobile") {
+        if (typeof result.data?.token !== "string" || typeof result.data?.refreshToken !== "string") {
+          return { refreshed: false };
+        }
         await this.onTokensRefreshed?.({
           token: result.data.token,
           refreshToken: result.data.refreshToken,
         });
+        return { refreshed: true, token: result.data.token };
       }
-      return result.data.token as string;
+
+      // Browser refresh responses intentionally contain no bearer JWT. The API
+      // rotates HTTP-only cookies, which the browser sends on the retried request.
+      return { refreshed: true };
     } catch {
-      return null;
+      return { refreshed: false };
     }
   }
 
@@ -100,9 +107,9 @@ export class ConnectMeApiClient {
         endpoint === "/auth/logout";
 
       if (response.status === 401 && allowRefresh && !authEndpoint) {
-        const freshToken = await this.refreshAccessToken();
-        if (freshToken) {
-          response = await this.fetchWithAuth(endpoint, options, freshToken);
+        const refresh = await this.refreshAccessToken();
+        if (refresh.refreshed) {
+          response = await this.fetchWithAuth(endpoint, options, refresh.token);
         }
         if (response.status === 401) await this.onUnauthorized?.();
       }
@@ -146,7 +153,7 @@ export class ConnectMeApiClient {
     return this.request<BootstrapStatusDTO>("/auth/bootstrap/status");
   }
 
-  async setupBootstrap(input: BootstrapSetupInput): Promise<ApiResponse<{ user: AdminUserDTO; token: string; refreshToken?: string }>> {
+  async setupBootstrap(input: BootstrapSetupInput): Promise<ApiResponse<{ user: AdminUserDTO; token?: string; refreshToken?: string }>> {
     return this.request("/auth/bootstrap/setup", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
