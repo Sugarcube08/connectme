@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll } from "vitest";
+import { randomBytes } from "node:crypto";
 import request from "supertest";
 import { createApp } from "../app";
 import { prisma } from "@connectme/database";
@@ -6,6 +7,8 @@ import { bootstrapAdmin } from "@connectme/database/src/bootstrap";
 import sharp from "sharp";
 
 const app = createApp();
+const testUsername = `test-${randomBytes(6).toString("hex")}`;
+const testPassword = `${randomBytes(18).toString("base64url")}A1`;
 
 beforeAll(async () => {
   // Clear test tables
@@ -35,8 +38,7 @@ describe("Controlled First-Admin Bootstrap Workflow", () => {
   let adminToken: string;
 
   it("provisions pending administrator with a one-time cryptographic token", async () => {
-    const provisionResult = await bootstrapAdmin("harsh");
-    expect(provisionResult.username).toBe("harsh");
+    const provisionResult = await bootstrapAdmin();
     expect(provisionResult.bootstrapToken).toBeDefined();
     bootstrapToken = provisionResult.bootstrapToken;
 
@@ -44,7 +46,6 @@ describe("Controlled First-Admin Bootstrap Workflow", () => {
     const statusRes = await request(app).get("/api/v1/auth/bootstrap/status");
     expect(statusRes.status).toBe(200);
     expect(statusRes.body.data.isBootstrapPending).toBe(true);
-    expect(statusRes.body.data.username).toBe("harsh");
   });
 
   it("completes first-admin bootstrap and locks setup permanently", async () => {
@@ -53,8 +54,8 @@ describe("Controlled First-Admin Bootstrap Workflow", () => {
       .post("/api/v1/auth/bootstrap/setup")
       .send({
         token: "invalid-token-12345",
-        username: "harsh",
-        password: "DevconRoyal2026!Secure",
+        username: testUsername,
+        password: testPassword,
         displayName: "Harsh Devcon",
       });
     expect(failRes.status).toBe(401);
@@ -64,8 +65,8 @@ describe("Controlled First-Admin Bootstrap Workflow", () => {
       .post("/api/v1/auth/bootstrap/setup")
       .send({
         token: bootstrapToken,
-        username: "harsh",
-        password: "DevconRoyal2026!Secure",
+        username: testUsername,
+        password: testPassword,
         displayName: "Harsh Devcon",
       });
     expect(successRes.status).toBe(200);
@@ -83,8 +84,8 @@ describe("Controlled First-Admin Bootstrap Workflow", () => {
       .post("/api/v1/auth/bootstrap/setup")
       .send({
         token: bootstrapToken,
-        username: "harsh",
-        password: "DevconRoyal2026!Secure",
+        username: testUsername,
+        password: testPassword,
       });
     expect(replayRes.status).toBe(401);
   });
@@ -94,7 +95,7 @@ describe("Controlled First-Admin Bootstrap Workflow", () => {
     const wrongRes = await request(app)
       .post("/api/v1/auth/login")
       .send({
-        username: "harsh",
+        username: testUsername,
         password: "WrongPassword999!",
       });
     expect(wrongRes.status).toBe(401);
@@ -103,8 +104,8 @@ describe("Controlled First-Admin Bootstrap Workflow", () => {
     const loginRes = await request(app)
       .post("/api/v1/auth/login")
       .send({
-        username: "harsh",
-        password: "DevconRoyal2026!Secure",
+        username: testUsername,
+        password: testPassword,
       });
     expect(loginRes.status).toBe(200);
     expect(loginRes.body.data.token).toBeDefined();
@@ -119,8 +120,8 @@ describe("Core Operations: Code Generation, Atomic Single-Use Redemption & Concu
     const loginRes = await request(app)
       .post("/api/v1/auth/login")
       .send({
-        username: "harsh",
-        password: "DevconRoyal2026!Secure",
+        username: testUsername,
+        password: testPassword,
       });
     adminToken = loginRes.body.data.token;
   });
