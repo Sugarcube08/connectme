@@ -20,7 +20,7 @@ const EnvSchema = z.object({
     .string()
     .default("devcon-obsidian-royal-jwt-secret-key-32-chars-minimum"),
   CORS_ORIGIN: z.string().default("http://localhost:3000,http://localhost:3001"),
-  QR_CANONICAL_ORIGIN: z.string().default("http://localhost:3001"),
+  QR_CANONICAL_ORIGIN: z.string().default("http://localhost:3000"),
   MAX_IMAGE_SIZE_BYTES: z
     .string()
     .default("2097152")
