@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "build": "turbo run build",
+    "postinstall": "pnpm --filter @connectme/database generate",
     "dev:api": "pnpm --filter @connectme/api dev",
     "dev:web": "pnpm --filter @connectme/web dev",
     "dev:mobile": "pnpm --filter @connectme/mobile start",

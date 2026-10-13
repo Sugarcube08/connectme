@@ -2,6 +2,8 @@ import { createHash, randomBytes } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { parseEnv } from "node:util";
+import type { Prisma } from "@prisma/client";
+
 
 async function loadEnvironment(): Promise<void> {
   const environmentProvidedByProcess = new Set(Object.keys(process.env));
@@ -48,7 +50,7 @@ export async function bootstrapAdmin(
   const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
   const pendingUsername = `pending-${randomBytes(12).toString("hex")}`;
 
-  await prisma.$transaction(async (tx) => {
+  await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     const existingAdmin = await tx.adminUser.findFirst();
     if (existingAdmin) {
       if (!existingAdmin.isBootstrapPending || existingAdmin.isActive) {

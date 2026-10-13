@@ -1,4 +1,4 @@
-import { prisma, AdminUser } from "@connectme/database";
+import { prisma, AdminUser, type Prisma } from "@connectme/database";
 
 export class UserRepository {
   async findByUsername(username: string): Promise<AdminUser | null> {
@@ -39,7 +39,7 @@ export class UserRepository {
     publicOrigin?: string;
   }): Promise<AdminUser | null> {
     try {
-      return await prisma.$transaction(async (tx) => {
+      return await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const update = await tx.adminUser.updateMany({
         where: {
           id: data.userId,

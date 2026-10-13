@@ -1,4 +1,4 @@
-import { prisma } from "@connectme/database";
+import { prisma, type Prisma } from "@connectme/database";
 import { TokenService } from "./token.service";
 import { ImageService } from "./image.service";
 import { ContactSubmissionSchema, ContactSubmissionInput, SubmissionSuccessResponse } from "@connectme/contracts";
@@ -38,7 +38,7 @@ export class RedemptionService {
     const tokenHash = this.tokenService.hashToken(options.token);
 
     // Step 3: Authoritative atomic transaction via Prisma
-    const submission = await prisma.$transaction(async (tx) => {
+    const submission = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       // Conditional atomic transition: ACTIVE -> CONSUMED
       const updated = await tx.accessCode.updateMany({
         where: {

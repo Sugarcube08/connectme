@@ -5,6 +5,7 @@
   "main": "dist/server.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",
+    "prebuild": "pnpm --filter @connectme/database generate",
     "build": "tsc",
     "start": "node dist/server.js",
     "test": "vitest run",

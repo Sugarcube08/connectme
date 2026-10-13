@@ -2,8 +2,7 @@ import { describe, it, expect, beforeAll } from "vitest";
 import { randomBytes } from "node:crypto";
 import request from "supertest";
 import { createApp } from "../app";
-import { prisma } from "@connectme/database";
-import { bootstrapAdmin } from "@connectme/database/src/bootstrap";
+import { prisma, bootstrapAdmin } from "@connectme/database";
 import sharp from "sharp";
 
 const app = createApp();

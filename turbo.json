@@ -18,6 +18,9 @@
       "dependsOn": ["^build"],
       "outputs": ["dist/**", ".next/**", "!.next/cache/**"]
     },
+    "@connectme/database#build": {
+      "cache": false
+    },
     "lint": {},
     "typecheck": {
       "dependsOn": ["^build"]
