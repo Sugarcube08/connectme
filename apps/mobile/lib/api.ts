@@ -11,6 +11,9 @@ export const API_BASE_URL =
 
 export const mobileApiClient = new ConnectMeApiClient({
   baseUrl: API_BASE_URL,
+  // Native requests do not carry the web origin automatically. Set this public,
+  // non-secret build-time value to the domain that hosts the visitor form.
+  publicOrigin: process.env.EXPO_PUBLIC_APP_URL,
   getToken: async () => await getAuthToken(),
   onUnauthorized: async () => {
     await removeAuthToken();
