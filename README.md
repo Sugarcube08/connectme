@@ -43,7 +43,7 @@ The API remains a separate process even when web and API are presented under one
 | Combined Compose profile | `--profile combined` starts MySQL, API, and web together. The legacy `app` profile remains available. |
 | Independently hosted services | API and web can be built/deployed as separate targets. Configure the web server's `API_INTERNAL_URL` to the API. Browser requests always use the same-origin Next.js proxy; `API_INTERNAL_URL` is server-only and does not need CORS configuration. |
 
-The runtime proxy preserves request bodies, cookies and binary responses. It supports CSV exports and contact images without loading image bytes into the web app.
+The runtime proxy preserves request bodies, cookies and binary responses. It supports CSV exports and contact images without loading image bytes into the web app. The public website origin is learned from the same-origin proxy during first-admin setup and stored in MySQL, so QR codes created later from the mobile admin app point to the website without a separate QR-origin variable.
 
 ## Quick start
 
