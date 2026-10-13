@@ -34,6 +34,24 @@ export function normalizeOrigin(value: string | undefined | null): string | null
  * same-origin Next.js proxy; that proxy strips browser Origin before calling API.
  * Native clients normally do not send Origin and therefore need no CORS grant.
  */
+function originFromDeploymentHost(host: string | undefined): string | null {
+  if (!host?.trim()) return null;
+  const value = host.includes("://") ? host : `https://${host}`;
+  return normalizeOrigin(value);
+}
+
+function deploymentOrigins(): Set<string> {
+  return new Set(
+    [
+      process.env.VERCEL_URL,
+      process.env.VERCEL_BRANCH_URL,
+      process.env.VERCEL_PROJECT_PRODUCTION_URL,
+    ]
+      .map(originFromDeploymentHost)
+      .filter((origin): origin is string => Boolean(origin))
+  );
+}
+
 export function isAllowedCorsOrigin(origin: string, request: Request): boolean {
   const normalized = normalizeOrigin(origin);
   if (!normalized || normalized !== origin) return false;
