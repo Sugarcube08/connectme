@@ -61,7 +61,7 @@ pnpm build
 
 ## Docker deployment
 
-See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for combined and independent deployments, environment maps, bootstrap/migration procedures, and reverse-proxy guidance.
+See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for combined and independent deployments and [docs/VERCEL_API.md](docs/VERCEL_API.md) for the Vercel API setup.
 
 ## Operational invariants
 
