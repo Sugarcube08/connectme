@@ -18,7 +18,10 @@ if (loadEnvFile) {
 
 const EnvSchema = z.object({
   PORT: z.coerce.number().int().min(1).max(65535).default(4000),
-  DATABASE_URL: z.string().min(1, "DATABASE_URL must be provided; there are no default database credentials."),
+  DATABASE_URL: z
+    .string()
+    .min(1, "DATABASE_URL must be provided; there are no default database credentials.")
+    .refine((value) => value.startsWith("mysql://"), "DATABASE_URL must be a MySQL URL beginning with mysql://."),
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   // No fallback values: generate independent random values per environment.
   SESSION_SECRET: z.string().min(32, "SESSION_SECRET must be at least 32 characters."),
