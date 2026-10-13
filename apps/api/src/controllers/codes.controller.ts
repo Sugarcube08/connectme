@@ -15,22 +15,15 @@ export class CodesController {
       const limit = parseInt((req.query.limit as string) || "20", 10);
       const status = (req.query.status as any) || undefined;
       const search = (req.query.search as string) || undefined;
-
-      const result = await this.tokenService.list({ page, limit, status, search });
-
+      const result = await this.tokenService.list({
+        adminUserId: req.adminUser!.id, page, limit, status, search,
+      });
       return res.status(200).json({
         success: true,
         data: result.codes,
-        meta: {
-          page,
-          limit,
-          total: result.total,
-          totalPages: result.totalPages,
-        },
+        meta: { page, limit, total: result.total, totalPages: result.totalPages },
       });
-    } catch (err) {
-      next(err);
-    }
+    } catch (err) { next(err); }
   };
 
   create = async (req: Request, res: Response, next: NextFunction) => {
@@ -38,56 +31,37 @@ export class CodesController {
       const count = parseInt(req.body.count || "1", 10);
       const label = req.body.label ? String(req.body.label).trim() : undefined;
       const expiresAt = req.body.expiresAt ? String(req.body.expiresAt) : null;
-
+      const options = {
+        adminUserId: req.adminUser!.id,
+        label,
+        expiresAt,
+        publicOrigin: await this.publicOriginService.resolve(req),
+      };
       if (count > 1) {
-        const codes = await this.tokenService.createBatch(count, { label, expiresAt, publicOrigin: await this.publicOriginService.resolve(req) });
-        return res.status(201).json({
-          success: true,
-          data: { count: codes.length, codes },
-        });
-      } else {
-        const code = await this.tokenService.createSingle({ label, expiresAt, publicOrigin: await this.publicOriginService.resolve(req) });
-        return res.status(201).json({
-          success: true,
-          data: code,
-        });
+        const codes = await this.tokenService.createBatch(count, options);
+        return res.status(201).json({ success: true, data: { count: codes.length, codes } });
       }
-    } catch (err) {
-      next(err);
-    }
+      const code = await this.tokenService.createSingle(options);
+      return res.status(201).json({ success: true, data: code });
+    } catch (err) { next(err); }
   };
 
   revoke = async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const id = String(req.params.id);
-      const revoked = await this.tokenService.revoke(id);
-
+      const revoked = await this.tokenService.revoke(String(req.params.id), req.adminUser!.id);
       if (!revoked) {
-        throw new NotFoundError(
-          "Code cannot be revoked because it does not exist or is not active."
-        );
+        throw new NotFoundError("Code cannot be revoked because it does not exist, is not owned by this admin, or is not active.");
       }
-
-      return res.status(200).json({
-        success: true,
-        data: { message: "Code successfully revoked." },
-      });
-    } catch (err) {
-      next(err);
-    }
+      return res.status(200).json({ success: true, data: { message: "Code successfully revoked." } });
+    } catch (err) { next(err); }
   };
 
   exportCsv = async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const csv = await this.tokenService.exportCsv();
+      const csv = await this.tokenService.exportCsv(req.adminUser!.id);
       res.setHeader("Content-Type", "text/csv; charset=utf-8");
-      res.setHeader(
-        "Content-Disposition",
-        `attachment; filename="connectme-codes-${new Date().toISOString().slice(0, 10)}.csv"`
-      );
+      res.setHeader("Content-Disposition", `attachment; filename="connectme-codes-${new Date().toISOString().slice(0, 10)}.csv"`);
       return res.status(200).send(csv);
-    } catch (err) {
-      next(err);
-    }
+    } catch (err) { next(err); }
   };
 }

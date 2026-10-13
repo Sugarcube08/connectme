@@ -1,9 +1,13 @@
-import { prisma, ContactSubmission, FollowUpStatus } from "@connectme/database";
+import { prisma, FollowUpStatus } from "@connectme/database";
+
+const ownerFilter = (adminUserId: string) => ({
+  accessCode: { is: { createdByAdminId: adminUserId } },
+});
 
 export class ContactRepository {
-  async findById(id: string) {
-    return prisma.contactSubmission.findUnique({
-      where: { id },
+  async findById(id: string, adminUserId: string) {
+    return prisma.contactSubmission.findFirst({
+      where: { id, ...ownerFilter(adminUserId) },
       include: {
         accessCode: { select: { label: true } },
         image: { select: { id: true, mime: true, size: true } },
@@ -12,17 +16,14 @@ export class ContactRepository {
   }
 
   async list(params: {
+    adminUserId: string;
     skip: number;
     take: number;
     status?: FollowUpStatus;
     search?: string;
   }) {
-    const where: any = {};
-
-    if (params.status) {
-      where.followUpStatus = params.status;
-    }
-
+    const where: any = ownerFilter(params.adminUserId);
+    if (params.status) where.followUpStatus = params.status;
     if (params.search) {
       where.OR = [
         { fullName: { contains: params.search } },
@@ -44,14 +45,10 @@ export class ContactRepository {
       }),
       prisma.contactSubmission.count({ where }),
     ]);
-
     return { items, total };
   }
 
-  async update(
-    id: string,
-    data: { followUpStatus?: FollowUpStatus; discussionNotes?: string }
-  ) {
+  async update(id: string, data: { followUpStatus?: FollowUpStatus; discussionNotes?: string }) {
     return prisma.contactSubmission.update({
       where: { id },
       data,
@@ -62,61 +59,52 @@ export class ContactRepository {
     });
   }
 
-  async getImage(contactId: string) {
-    return prisma.submissionImage.findUnique({
-      where: { contactSubmissionId: contactId },
+  async getImage(contactId: string, adminUserId: string) {
+    return prisma.submissionImage.findFirst({
+      where: {
+        contactSubmission: {
+          is: { accessCode: { is: { createdByAdminId: adminUserId } } },
+        },
+        contactSubmissionId: contactId,
+      },
       select: { profileImage: true, mime: true, size: true },
     });
   }
 
-  async deleteImage(contactId: string): Promise<boolean> {
-    try {
-      await prisma.submissionImage.delete({
-        where: { contactSubmissionId: contactId },
-      });
-      return true;
-    } catch {
-      return false;
-    }
+  async deleteImage(contactId: string, adminUserId: string): Promise<boolean> {
+    const result = await prisma.submissionImage.deleteMany({
+      where: {
+        contactSubmissionId: contactId,
+        contactSubmission: {
+          is: { accessCode: { is: { createdByAdminId: adminUserId } } },
+        },
+      },
+    });
+    return result.count > 0;
   }
 
-  async getMetrics() {
+  async getMetrics(adminUserId: string) {
+    const codes = { createdByAdminId: adminUserId };
+    const submissions = ownerFilter(adminUserId);
+    const now = new Date();
     const [
-      totalCodes,
-      activeCodes,
-      consumedCodes,
-      revokedCodes,
-      expiredCodes,
-      totalSubmissions,
-      statusNew,
-      statusContacted,
-      statusReplied,
-      statusOpportunity,
-      statusArchived,
-      recentSubmissions,
+      totalCodes, activeCodes, consumedCodes, revokedCodes, expiredCodes,
+      totalSubmissions, statusNew, statusContacted, statusReplied,
+      statusOpportunity, statusArchived, recentSubmissions,
     ] = await Promise.all([
-      prisma.accessCode.count(),
-      prisma.accessCode.count({
-        where: {
-          status: "ACTIVE",
-          OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
-        },
-      }),
-      prisma.accessCode.count({ where: { status: "CONSUMED" } }),
-      prisma.accessCode.count({ where: { status: "REVOKED" } }),
-      prisma.accessCode.count({
-        where: {
-          status: "ACTIVE",
-          expiresAt: { lte: new Date() },
-        },
-      }),
-      prisma.contactSubmission.count(),
-      prisma.contactSubmission.count({ where: { followUpStatus: "NEW" } }),
-      prisma.contactSubmission.count({ where: { followUpStatus: "CONTACTED" } }),
-      prisma.contactSubmission.count({ where: { followUpStatus: "REPLIED" } }),
-      prisma.contactSubmission.count({ where: { followUpStatus: "OPPORTUNITY" } }),
-      prisma.contactSubmission.count({ where: { followUpStatus: "ARCHIVED" } }),
+      prisma.accessCode.count({ where: codes }),
+      prisma.accessCode.count({ where: { ...codes, status: "ACTIVE", OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] } }),
+      prisma.accessCode.count({ where: { ...codes, status: "CONSUMED" } }),
+      prisma.accessCode.count({ where: { ...codes, status: "REVOKED" } }),
+      prisma.accessCode.count({ where: { ...codes, status: "ACTIVE", expiresAt: { lte: now } } }),
+      prisma.contactSubmission.count({ where: submissions }),
+      prisma.contactSubmission.count({ where: { ...submissions, followUpStatus: "NEW" } }),
+      prisma.contactSubmission.count({ where: { ...submissions, followUpStatus: "CONTACTED" } }),
+      prisma.contactSubmission.count({ where: { ...submissions, followUpStatus: "REPLIED" } }),
+      prisma.contactSubmission.count({ where: { ...submissions, followUpStatus: "OPPORTUNITY" } }),
+      prisma.contactSubmission.count({ where: { ...submissions, followUpStatus: "ARCHIVED" } }),
       prisma.contactSubmission.findMany({
+        where: submissions,
         take: 5,
         orderBy: { submittedAt: "desc" },
         include: {
@@ -127,29 +115,20 @@ export class ContactRepository {
     ]);
 
     return {
-      totalCodes,
-      activeCodes,
-      consumedCodes,
-      revokedCodes,
-      expiredCodes,
-      totalSubmissions,
+      totalCodes, activeCodes, consumedCodes, revokedCodes, expiredCodes, totalSubmissions,
       recentSubmissions,
       statusDistribution: {
-        NEW: statusNew,
-        CONTACTED: statusContacted,
-        REPLIED: statusReplied,
-        OPPORTUNITY: statusOpportunity,
-        ARCHIVED: statusArchived,
+        NEW: statusNew, CONTACTED: statusContacted, REPLIED: statusReplied,
+        OPPORTUNITY: statusOpportunity, ARCHIVED: statusArchived,
       },
     };
   }
 
-  async exportAll() {
+  async exportAll(adminUserId: string) {
     return prisma.contactSubmission.findMany({
+      where: ownerFilter(adminUserId),
       orderBy: { submittedAt: "desc" },
-      include: {
-        accessCode: { select: { label: true } },
-      },
+      include: { accessCode: { select: { label: true } } },
     });
   }
 }

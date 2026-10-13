@@ -23,7 +23,7 @@ paths:
           required: true
           schema:
             type: string
-          description: Base64URL 128-bit random token
+          description: Base64URL 256-bit cryptographically random token
       responses:
         '200':
           description: Eligibility status
@@ -97,7 +97,7 @@ paths:
   /auth/login:
     post:
       summary: Administrator login
-      description: Sets HTTP-only web session cookie and returns mobile bearer token.
+      description: Sets HTTP-only 72-hour access and 7-day refresh cookies; returns an access JWT for mobile clients. Mobile clients identify with X-ConnectMe-Client: mobile and receive the refresh token in JSON.
       requestBody:
         required: true
         content:
@@ -126,6 +126,28 @@ paths:
         '401':
           $ref: '#/components/responses/ErrorResponse'
 
+  /auth/refresh:
+    post:
+      summary: Rotate refresh token and issue new access JWT
+      description: |
+        Refresh tokens are one-time rotating credentials stored only as SHA-256 digests.
+        Access JWTs expire after 72 hours. Refresh tokens expire after 7 days; replay of a revoked token revokes active refresh tokens for that account.
+        Browser refresh tokens are sent using the HTTP-only connectme_refresh cookie. Native clients send refreshToken in the JSON body with X-ConnectMe-Client: mobile.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refreshToken:
+                  type: string
+      responses:
+        '200':
+          description: New access JWT and rotated refresh token; mobile clients receive refreshToken in JSON
+        '401':
+          $ref: '#/components/responses/ErrorResponse'
+
   /auth/logout:
     post:
       summary: Administrator logout
@@ -143,6 +165,36 @@ paths:
         '200':
           description: Current admin details
         '401':
+          $ref: '#/components/responses/ErrorResponse'
+
+  /admin/admins:
+    post:
+      summary: Provision an additional administrator
+      description: Only the initial administrator may create additional admin accounts. New admins receive isolated code/contact data scopes.
+      security:
+        - BearerAuth: []
+        - CookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username:
+                  type: string
+                  minLength: 3
+                  maxLength: 32
+                displayName:
+                  type: string
+                password:
+                  type: string
+                  minLength: 8
+      responses:
+        '201':
+          description: Administrator account created
+        '403':
           $ref: '#/components/responses/ErrorResponse'
 
   /admin/dashboard:
@@ -187,7 +239,7 @@ paths:
             type: string
       responses:
         '200':
-          description: Paginated code list (raw tokens are never returned)
+          description: Paginated codes created by the authenticated administrator only (raw tokens are never returned)
     post:
       summary: Generate single or batch access codes
       security:
@@ -210,7 +262,7 @@ paths:
                   format: date-time
       responses:
         '201':
-          description: Created codes with one-time tokens and QR assets
+          description: One-time 256-bit tokens and QR assets; database stores keyed HMAC digests, not raw tokens
 
   /admin/codes/{id}/revoke:
     post:
@@ -271,7 +323,7 @@ paths:
             type: string
       responses:
         '200':
-          description: Paginated contacts
+          description: Contacts submitted through codes created by the authenticated administrator only
 
   /admin/contacts/{id}:
     get:
@@ -457,12 +509,11 @@ components:
     AdminLoginInput:
       type: object
       required:
-        - email
+        - username
         - password
       properties:
-        email:
+        username:
           type: string
-          format: email
         password:
           type: string
 
@@ -472,7 +523,7 @@ components:
         id:
           type: string
           format: uuid
-        email:
+        username:
           type: string
         createdAt:
           type: string

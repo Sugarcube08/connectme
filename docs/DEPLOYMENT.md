@@ -25,17 +25,17 @@ Populate every required value. Generate independent signing keys, never reuse th
 ```bash
 openssl rand -hex 24  # use the output for MYSQL_ROOT_PASSWORD
 openssl rand -hex 32  # use the output for SESSION_SECRET
-openssl rand -hex 32  # run again for JWT_SECRET
+openssl rand -hex 32  # run again for JWT_SECRET\nopenssl rand -hex 32  # run again for ACCESS_CODE_PEPPER
 ```
 
-Use a URL-safe password such as random hex for Compose-based MySQL credentials. A Prisma MySQL URL has the form `mysql://USER:PASSWORD@HOST:3306/DATABASE`. Reserved characters in usernames, passwords, database names, and URL option values must be percent-encoded. The API validates the URL's scheme, credentials, host, port, database path, and percent-encoding before startup. `DATABASE_URL` must be a literal MySQL connection string for processes running on the host. Docker Compose constructs a separate container-to-database URL using the configured app user/password and the internal `mysql` hostname.
+Use a URL-safe password such as random hex for Compose-based MySQL credentials. A Prisma MySQL URL has the form `mysql://USER:PASSWORD@HOST:3306/DATABASE`. Reserved characters in usernames, passwords, database names, and URL option values must be percent-encoded. The API validates the URL's scheme, credentials, host, port, database path, and percent-encoding before startup. New redeem codes use 256-bit random tokens and store a peppered HMAC-SHA-256 digest, not recoverable token text; existing SHA-256 digests remain supported for backward compatibility. Access JWTs last 72 hours; rotating refresh tokens last 7 days. `DATABASE_URL` must be a literal MySQL connection string for processes running on the host. Docker Compose constructs a separate container-to-database URL using the configured app user/password and the internal `mysql` hostname.
 
 | Variable | Required | Used by | Purpose |
 |---|---|---|---|
 | `MYSQL_ROOT_PASSWORD`, `MYSQL_USER`, `MYSQL_PASSWORD`, `MYSQL_DATABASE` | Yes for Compose | MySQL/Compose | Distinct root password, least-privilege application user/password, and database name. No default credentials are supplied. |
 | `DATABASE_URL` | Yes for host processes | API, Prisma CLI | Database connection reachable from the host process. |
 | `TEST_DATABASE_URL` | Yes for integration tests | Vitest | Isolated test database; its database name must end in `_test` or `_testing`. |
-| `SESSION_SECRET`, `JWT_SECRET` | Yes | API | Separate keys for browser session and mobile bearer-token signing. At least 32 characters each. |
+| `SESSION_SECRET`, `JWT_SECRET`, `ACCESS_CODE_PEPPER` | Yes | API | Three independent secrets, each at least 32 characters. The pepper keys new access-code HMAC digests. |
 | `NEXT_PUBLIC_APP_URL` | Optional for bootstrap | Bootstrap CLI | Public web origin; setup links end in `/setup` and do not include the setup token. Set it when running bootstrap outside Vercel if the default local URL is not correct. |
 | `API_INTERNAL_URL` | Yes when web is separate from API | Next.js server | Server-only URL of Express. It is never placed in browser code. The proxy sends its public origin to the API for QR generation. |
 | `COMPOSE_API_INTERNAL_URL` | Required for web-only Compose deployments | Docker Compose / web container | Optional override passed to the web container as `API_INTERNAL_URL`; leave blank for combined mode, where the private Compose service URL is used. |
@@ -48,7 +48,7 @@ Do not copy the blank values unchanged into a running environment. Never commit 
 This mode places Next.js and Express in separate containers while exposing the website as the normal public entry point. The web process proxies API paths to Express with the runtime `API_INTERNAL_URL`; browser JavaScript normally uses same-origin relative paths.
 
 1. Set `NEXT_PUBLIC_APP_URL` to the public web origin for the setup link, if running the bootstrap CLI outside Vercel.
-2. Generate separate `SESSION_SECRET` and `JWT_SECRET` values.
+2. Set independent `SESSION_SECRET`, `JWT_SECRET`, and `ACCESS_CODE_PEPPER` values.
 3. Confirm the MySQL database and local `DATABASE_URL` are populated. No fixed CORS or QR-origin variables are required.
 
 Run the managed Prisma migration and bootstrap before starting the app:

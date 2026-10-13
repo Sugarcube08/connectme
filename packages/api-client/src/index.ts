@@ -19,158 +19,186 @@ import {
 export interface ApiClientConfig {
   baseUrl: string;
   getToken?: () => string | null | Promise<string | null>;
-  onUnauthorized?: () => void;
+  getRefreshToken?: () => string | null | Promise<string | null>;
+  onTokensRefreshed?: (tokens: { token: string; refreshToken: string }) => void | Promise<void>;
+  onUnauthorized?: () => void | Promise<void>;
+  clientType?: "mobile";
   /** Public visitor-facing web origin. Set by native clients only when they create QR codes directly. */
   publicOrigin?: string;
 }
 
 export class ConnectMeApiClient {
   private baseUrl: string;
-  private getToken?: () => string | null | Promise<string | null>;
-  private onUnauthorized?: () => void;
+  private getToken?: ApiClientConfig["getToken"];
+  private getRefreshToken?: ApiClientConfig["getRefreshToken"];
+  private onTokensRefreshed?: ApiClientConfig["onTokensRefreshed"];
+  private onUnauthorized?: ApiClientConfig["onUnauthorized"];
+  private clientType?: ApiClientConfig["clientType"];
   private publicOrigin?: string;
 
   constructor(config: ApiClientConfig) {
     this.baseUrl = config.baseUrl.replace(/\/+$/, "");
     this.getToken = config.getToken;
+    this.getRefreshToken = config.getRefreshToken;
+    this.onTokensRefreshed = config.onTokensRefreshed;
     this.onUnauthorized = config.onUnauthorized;
+    this.clientType = config.clientType;
     this.publicOrigin = config.publicOrigin?.replace(/\/+$/, "");
+  }
+
+  private async fetchWithAuth(endpoint: string, options: RequestInit, freshToken?: string): Promise<Response> {
+    const headers = new Headers(options.headers || {});
+    if (this.clientType) headers.set("X-ConnectMe-Client", this.clientType);
+    if (this.getToken) {
+      const savedToken = await this.getToken();
+      const token = savedToken || freshToken;
+      if (token) headers.set("Authorization", `Bearer ${token}`);
+    }
+    return fetch(`${this.baseUrl}/api/v1${endpoint}`, {
+      ...options,
+      headers,
+      credentials: "include",
+    });
+  }
+
+  private async refreshAccessToken(): Promise<string | null> {
+    try {
+      const refreshToken = await this.getRefreshToken?.();
+      const headers = new Headers({ "Content-Type": "application/json" });
+      if (this.clientType) headers.set("X-ConnectMe-Client", this.clientType);
+      const response = await fetch(`${this.baseUrl}/api/v1/auth/refresh`, {
+        method: "POST",
+        headers,
+        credentials: "include",
+        ...(refreshToken ? { body: JSON.stringify({ refreshToken }) } : {}),
+      });
+      const result = await response.json();
+      if (!response.ok || result?.success !== true || typeof result?.data?.token !== "string") return null;
+
+      if (this.clientType === "mobile" && typeof result.data.refreshToken === "string") {
+        await this.onTokensRefreshed?.({
+          token: result.data.token,
+          refreshToken: result.data.refreshToken,
+        });
+      }
+      return result.data.token as string;
+    } catch {
+      return null;
+    }
   }
 
   private async request<T>(
     endpoint: string,
-    options: RequestInit = {}
+    options: RequestInit = {},
+    allowRefresh = true
   ): Promise<ApiResponse<T>> {
-    const url = `${this.baseUrl}/api/v1${endpoint}`;
-    const headers = new Headers(options.headers || {});
-
-    if (this.getToken) {
-      const token = await this.getToken();
-      if (token) {
-        headers.set("Authorization", `Bearer ${token}`);
-      }
-    }
-
     try {
-      const response = await fetch(url, {
-        ...options,
-        headers,
-        credentials: "include", // For web session cookies
-      });
+      let response = await this.fetchWithAuth(endpoint, options);
+      const authEndpoint = endpoint === "/auth/login" ||
+        endpoint === "/auth/bootstrap/setup" ||
+        endpoint === "/auth/refresh" ||
+        endpoint === "/auth/logout";
 
-      if (response.status === 401 && this.onUnauthorized) {
-        this.onUnauthorized();
+      if (response.status === 401 && allowRefresh && !authEndpoint) {
+        const freshToken = await this.refreshAccessToken();
+        if (freshToken) {
+          response = await this.fetchWithAuth(endpoint, options, freshToken);
+        }
+        if (response.status === 401) await this.onUnauthorized?.();
       }
 
-      const json = await response.json();
-      return json as ApiResponse<T>;
+      return await response.json() as ApiResponse<T>;
     } catch (err: any) {
       return {
         success: false,
         error: {
           code: "NETWORK_ERROR",
-          message: err.message || "Failed to communicate with API server.",
+          message: err?.message || "Failed to communicate with API server.",
         },
       };
     }
   }
 
-  // --- Public Endpoints ---
-
   async verifyCode(token: string): Promise<ApiResponse<PublicCodeVerificationResponse>> {
-    return this.request<PublicCodeVerificationResponse>(`/public/codes/${token}`);
+    return this.request<PublicCodeVerificationResponse>(`/public/codes/${encodeURIComponent(token)}`);
   }
 
-  async redeemCode(
-    token: string,
-    data: ContactSubmissionInput,
-    image?: any
-  ): Promise<ApiResponse<SubmissionSuccessResponse>> {
+  async redeemCode(token: string, data: ContactSubmissionInput, image?: any): Promise<ApiResponse<SubmissionSuccessResponse>> {
     if (image) {
       const formData = new FormData();
       Object.entries(data).forEach(([key, val]) => {
-        if (val !== undefined && val !== null) {
-          formData.append(key, String(val));
-        }
+        if (val !== undefined && val !== null) formData.append(key, String(val));
       });
       formData.append("profileImage", image);
-
-      return this.request<SubmissionSuccessResponse>(`/public/codes/${token}/redeem`, {
+      return this.request<SubmissionSuccessResponse>(`/public/codes/${encodeURIComponent(token)}/redeem`, {
         method: "POST",
         body: formData,
       });
     }
-
-    return this.request<SubmissionSuccessResponse>(`/public/codes/${token}/redeem`, {
+    return this.request<SubmissionSuccessResponse>(`/public/codes/${encodeURIComponent(token)}/redeem`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
     });
   }
 
-  // --- Auth & Bootstrap ---
-
   async getBootstrapStatus(): Promise<ApiResponse<BootstrapStatusDTO>> {
     return this.request<BootstrapStatusDTO>("/auth/bootstrap/status");
   }
 
-  async setupBootstrap(
-    input: BootstrapSetupInput
-  ): Promise<ApiResponse<{ user: AdminUserDTO; token: string }>> {
-    return this.request<{ user: AdminUserDTO; token: string }>("/auth/bootstrap/setup", {
+  async setupBootstrap(input: BootstrapSetupInput): Promise<ApiResponse<{ user: AdminUserDTO; token: string; refreshToken?: string }>> {
+    return this.request("/auth/bootstrap/setup", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(input),
     });
   }
 
-  async login(
-    input: AdminLoginInput
-  ): Promise<ApiResponse<{ user: AdminUserDTO; token: string }>> {
-    return this.request<{ user: AdminUserDTO; token: string }>("/auth/login", {
+  async login(input: AdminLoginInput): Promise<ApiResponse<{ user: AdminUserDTO; token: string; refreshToken?: string }>> {
+    return this.request("/auth/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(input),
     });
+  }
+
+  async refresh(): Promise<ApiResponse<{ user: AdminUserDTO; token: string; refreshToken?: string }>> {
+    const refreshToken = await this.getRefreshToken?.();
+    return this.request("/auth/refresh", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      ...(refreshToken ? { body: JSON.stringify({ refreshToken }) } : {}),
+    }, false);
   }
 
   async logout(): Promise<ApiResponse<{ message: string }>> {
-    return this.request<{ message: string }>("/auth/logout", {
+    const refreshToken = await this.getRefreshToken?.();
+    return this.request("/auth/logout", {
       method: "POST",
-    });
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(refreshToken ? { refreshToken } : {}),
+    }, false);
   }
 
   async getMe(): Promise<ApiResponse<{ user: AdminUserDTO }>> {
-    return this.request<{ user: AdminUserDTO }>("/auth/me");
+    return this.request("/auth/me");
   }
-
-  // --- Admin Dashboard & Codes ---
 
   async getDashboard(): Promise<ApiResponse<DashboardMetrics>> {
-    return this.request<DashboardMetrics>("/admin/dashboard");
+    return this.request("/admin/dashboard");
   }
 
-  async listCodes(params?: {
-    page?: number;
-    limit?: number;
-    status?: string;
-    search?: string;
-  }): Promise<ApiResponse<AccessCodeItem[]>> {
+  async listCodes(params?: { page?: number; limit?: number; status?: string; search?: string }): Promise<ApiResponse<AccessCodeItem[]>> {
     const query = new URLSearchParams();
     if (params?.page) query.set("page", String(params.page));
     if (params?.limit) query.set("limit", String(params.limit));
     if (params?.status) query.set("status", params.status);
     if (params?.search) query.set("search", params.search);
-
     const qs = query.toString();
-    return this.request<AccessCodeItem[]>(`/admin/codes${qs ? `?${qs}` : ""}`);
+    return this.request(`/admin/codes${qs ? `?${qs}` : ""}`);
   }
 
-  async createCodes(params: {
-    count?: number;
-    label?: string;
-    expiresAt?: string | null;
-  }): Promise<ApiResponse<{ count: number; codes: GeneratedCodeDetail[] } | GeneratedCodeDetail>> {
+  async createCodes(params: { count?: number; label?: string; expiresAt?: string | null }): Promise<ApiResponse<{ count: number; codes: GeneratedCodeDetail[] } | GeneratedCodeDetail>> {
     return this.request("/admin/codes", {
       method: "POST",
       headers: {
@@ -182,61 +210,40 @@ export class ConnectMeApiClient {
   }
 
   async revokeCode(id: string): Promise<ApiResponse<{ message: string }>> {
-    return this.request<{ message: string }>(`/admin/codes/${id}/revoke`, {
-      method: "POST",
-    });
+    return this.request(`/admin/codes/${encodeURIComponent(id)}/revoke`, { method: "POST" });
   }
 
-  // --- Admin Contacts ---
-
-  async listContacts(params?: {
-    page?: number;
-    limit?: number;
-    status?: string;
-    search?: string;
-  }): Promise<ApiResponse<ContactItem[]>> {
+  async listContacts(params?: { page?: number; limit?: number; status?: string; search?: string }): Promise<ApiResponse<ContactItem[]>> {
     const query = new URLSearchParams();
     if (params?.page) query.set("page", String(params.page));
     if (params?.limit) query.set("limit", String(params.limit));
     if (params?.status) query.set("status", params.status);
     if (params?.search) query.set("search", params.search);
-
     const qs = query.toString();
-    return this.request<ContactItem[]>(`/admin/contacts${qs ? `?${qs}` : ""}`);
+    return this.request(`/admin/contacts${qs ? `?${qs}` : ""}`);
   }
 
   async getContact(id: string): Promise<ApiResponse<ContactItem>> {
-    return this.request<ContactItem>(`/admin/contacts/${id}`);
+    return this.request(`/admin/contacts/${encodeURIComponent(id)}`);
   }
 
-  async updateContact(
-    id: string,
-    input: UpdateContactInput
-  ): Promise<ApiResponse<ContactItem>> {
-    return this.request<ContactItem>(`/admin/contacts/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(input),
+  async updateContact(id: string, input: UpdateContactInput): Promise<ApiResponse<ContactItem>> {
+    return this.request(`/admin/contacts/${encodeURIComponent(id)}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input),
     });
   }
 
   async deleteContactImage(id: string): Promise<ApiResponse<{ message: string }>> {
-    return this.request<{ message: string }>(`/admin/contacts/${id}/image`, {
-      method: "DELETE",
-    });
+    return this.request(`/admin/contacts/${encodeURIComponent(id)}/image`, { method: "DELETE" });
   }
 
-  // --- Settings ---
-
   async getSettings(): Promise<ApiResponse<AppSettings>> {
-    return this.request<AppSettings>("/admin/settings");
+    return this.request("/admin/settings");
   }
 
   async updateSettings(input: UpdateSettingsInput): Promise<ApiResponse<AppSettings>> {
-    return this.request<AppSettings>("/admin/settings", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(input),
+    return this.request("/admin/settings", {
+      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input),
     });
   }
 }

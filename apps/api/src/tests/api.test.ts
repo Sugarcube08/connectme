@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll } from "vitest";
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import request from "supertest";
 import { createApp } from "../app";
 import { prisma, bootstrapAdmin } from "@connectme/database";
@@ -12,6 +12,7 @@ const testPassword = `${randomBytes(18).toString("base64url")}A1`;
 
 beforeAll(async () => {
   // Clear test tables
+  await prisma.adminRefreshToken.deleteMany();
   await prisma.submissionImage.deleteMany();
   await prisma.contactSubmission.deleteMany();
   await prisma.accessCode.deleteMany();
@@ -180,7 +181,7 @@ describe("Core Operations: Code Generation, Atomic Single-Use Redemption & Concu
     const code = genRes.body.data;
     expect(code.url).toBe(`https://connectme.example.test/${code.token}`);
     expect(code.token).toBeDefined();
-    expect(code.token.length).toBe(22);
+    expect(code.token.length).toBe(43);
     expect(code.qrDataUrl.startsWith("data:image/png;base64,")).toBe(true);
 
     // Public eligibility check
@@ -298,4 +299,96 @@ describe("Core Operations: Code Generation, Atomic Single-Use Redemption & Concu
     expect(dashRes.status).toBe(200);
     expect(dashRes.body.data.totalSubmissions).toBeGreaterThanOrEqual(1);
   });
+
+  it("isolates codes and submissions per admin and rotates 7-day refresh tokens", async () => {
+    const secondUsername = `second-${randomBytes(6).toString("hex")}`;
+    const secondPassword = `${randomBytes(18).toString("base64url")}A1`;
+
+    const provisionRes = await request(app)
+      .post("/api/v1/admin/admins")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ username: secondUsername, displayName: "Second Admin", password: secondPassword });
+    expect(provisionRes.status).toBe(201);
+    expect(provisionRes.body.data.user.username).toBe(secondUsername);
+
+    const secondLogin = await request(app)
+      .post("/api/v1/auth/login")
+      .set("X-ConnectMe-Client", "mobile")
+      .send({ username: secondUsername, password: secondPassword });
+    expect(secondLogin.status).toBe(200);
+    expect(secondLogin.body.data.refreshToken).toBeDefined();
+    const secondAccessToken = secondLogin.body.data.token;
+    const claims = JSON.parse(Buffer.from(secondAccessToken.split(".")[1], "base64url").toString("utf8"));
+    expect(claims.exp - claims.iat).toBe(72 * 60 * 60);
+
+    const oldRefreshToken = secondLogin.body.data.refreshToken as string;
+    const storedRefresh = await prisma.adminRefreshToken.findUnique({
+      where: { tokenHash: createHash("sha256").update(oldRefreshToken).digest("hex") },
+    });
+    expect(storedRefresh).not.toBeNull();
+    expect(Math.abs(storedRefresh!.expiresAt.getTime() - storedRefresh!.createdAt.getTime() - 7 * 24 * 60 * 60 * 1000)).toBeLessThan(1000);
+
+    const refreshRes = await request(app)
+      .post("/api/v1/auth/refresh")
+      .set("X-ConnectMe-Client", "mobile")
+      .send({ refreshToken: oldRefreshToken });
+    expect(refreshRes.status).toBe(200);
+    expect(refreshRes.body.data.token).toBeDefined();
+    expect(refreshRes.body.data.refreshToken).toBeDefined();
+    expect(refreshRes.body.data.refreshToken).not.toBe(oldRefreshToken);
+
+    const replayRes = await request(app)
+      .post("/api/v1/auth/refresh")
+      .set("X-ConnectMe-Client", "mobile")
+      .send({ refreshToken: oldRefreshToken });
+    expect(replayRes.status).toBe(401);
+
+    const secondCodeRes = await request(app)
+      .post("/api/v1/admin/codes")
+      .set("Authorization", `Bearer ${secondAccessToken}`)
+      .send({ label: "Second Admin Private Code" });
+    expect(secondCodeRes.status).toBe(201);
+    const secondCode = secondCodeRes.body.data;
+    expect(secondCode.token.length).toBe(43);
+    const storedSecondCode = await prisma.accessCode.findUnique({ where: { id: secondCode.id } });
+    expect(storedSecondCode?.tokenHash).toMatch(/^hmac-sha256:/);
+    expect(storedSecondCode?.tokenHash).not.toBe(createHash("sha256").update(secondCode.token).digest("hex"));
+
+    const secondCodes = await request(app)
+      .get("/api/v1/admin/codes")
+      .set("Authorization", `Bearer ${secondAccessToken}`);
+    expect(secondCodes.status).toBe(200);
+    expect(secondCodes.body.data.some((item: any) => item.id === secondCode.id)).toBe(true);
+
+    const firstCodes = await request(app)
+      .get("/api/v1/admin/codes")
+      .set("Authorization", `Bearer ${adminToken}`);
+    expect(firstCodes.status).toBe(200);
+    expect(firstCodes.body.data.some((item: any) => item.id === secondCode.id)).toBe(false);
+
+    const firstCodeId = firstCodes.body.data[0].id as string;
+    const forbiddenRevoke = await request(app)
+      .post(`/api/v1/admin/codes/${firstCodeId}/revoke`)
+      .set("Authorization", `Bearer ${secondAccessToken}`);
+    expect(forbiddenRevoke.status).toBe(404);
+
+    const firstContacts = await request(app)
+      .get("/api/v1/admin/contacts")
+      .set("Authorization", `Bearer ${adminToken}`);
+    expect(firstContacts.status).toBe(200);
+    expect(firstContacts.body.data.length).toBeGreaterThan(0);
+    const privateContactId = firstContacts.body.data[0].id as string;
+
+    const secondContacts = await request(app)
+      .get("/api/v1/admin/contacts")
+      .set("Authorization", `Bearer ${secondAccessToken}`);
+    expect(secondContacts.status).toBe(200);
+    expect(secondContacts.body.data).toHaveLength(0);
+
+    const forbiddenContact = await request(app)
+      .get(`/api/v1/admin/contacts/${privateContactId}`)
+      .set("Authorization", `Bearer ${secondAccessToken}`);
+    expect(forbiddenContact.status).toBe(404);
+  });
+
 });

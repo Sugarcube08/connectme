@@ -8,13 +8,13 @@ Provision a managed MySQL database through your chosen provider. Use a **new, em
 
 The checked-in `apps/api/.env.example` documents local API settings. Vercel does not load this file automatically; set the variables in the API project's Environment Variables settings.
 
-Set the API project's production environment variables in Vercel:
+Set the API project's production environment variables in Vercel. `ACCESS_CODE_PEPPER` is a new required variable for this release; configure it before deploying the new revision:
 
 | Variable | Required | Value |
 |---|---:|---|
 | `DATABASE_URL` | Yes | Provider-issued MySQL URL, `mysql://user:password@host:3306/database`; use the provider's recommended pooled URL for serverless runtime when available. |
 | `SESSION_SECRET` | Yes | Unique random secret, at least 32 characters. |
-| `JWT_SECRET` | Yes | A different unique secret, at least 32 characters. |
+| `JWT_SECRET` | Yes | A different unique secret, at least 32 characters. |\n| `ACCESS_CODE_PEPPER` | Yes | Separate random secret, at least 32 characters, used for new redeem-code HMAC digests. Preserve it across deployments. |
 | `NODE_ENV` | Recommended | `production`. |
 | `MAX_IMAGE_SIZE_BYTES` | Optional | Defaults to `2097152` (2 MiB). |
 | `MAX_BATCH_CODE_COUNT` | Optional | Defaults to `100`. |
@@ -26,7 +26,7 @@ openssl rand -hex 32
 openssl rand -hex 32
 ```
 
-Paste the outputs into Vercel's Environment Variables settings. Never add real values to `.env.example`, commit them, or expose them as `NEXT_PUBLIC_*` variables. Prisma requires special characters in URL components—including usernames and passwords—to be percent-encoded. Example: `p@ss:word%` becomes `p%40ss%3Aword%25`. Keep the provider-issued connection URL encoded as supplied; do not manually decode it.
+Paste the outputs into Vercel's Environment Variables settings. Never add real values to `.env.example`, commit them, or expose them as `NEXT_PUBLIC_*` variables. Prisma requires special characters in URL components—including usernames and passwords—to be percent-encoded. Example: `p@ss:word%` becomes `p%40ss%3Aword%25`. Keep the provider-issued connection URL encoded as supplied; do not manually decode it. New redeem codes are 256-bit random values; MySQL stores only a keyed HMAC-SHA-256 digest, never a recoverable token. Keep `ACCESS_CODE_PEPPER` stable: losing/changing it would make newly issued codes unverifiable. Older SHA-256 code digests remain accepted during transition. Access JWTs expire after 72 hours; refresh tokens expire after 7 days and are rotated on use.
 
 ### Removed origin variables
 
