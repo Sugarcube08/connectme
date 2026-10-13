@@ -161,7 +161,7 @@ export class ConnectMeApiClient {
     });
   }
 
-  async login(input: AdminLoginInput): Promise<ApiResponse<{ user: AdminUserDTO; token: string; refreshToken?: string }>> {
+  async login(input: AdminLoginInput): Promise<ApiResponse<{ user: AdminUserDTO; token?: string; refreshToken?: string }>> {
     return this.request("/auth/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -169,7 +169,7 @@ export class ConnectMeApiClient {
     });
   }
 
-  async refresh(): Promise<ApiResponse<{ user: AdminUserDTO; token: string; refreshToken?: string }>> {
+  async refresh(): Promise<ApiResponse<{ user: AdminUserDTO; token?: string; refreshToken?: string }>> {
     const refreshToken = await this.getRefreshToken?.();
     return this.request("/auth/refresh", {
       method: "POST",
