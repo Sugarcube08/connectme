@@ -426,6 +426,24 @@ describe("Core Operations: Code Generation, Atomic Single-Use Redemption & Concu
       .get(`/api/v1/admin/contacts/${secondPrivateContactId}`)
       .set("Authorization", `Bearer ${adminToken}`);
     expect(forbiddenSecondContact.status).toBe(404);
+
+    const beforeForbiddenUpdate = await request(app)
+      .get(`/api/v1/admin/contacts/${secondPrivateContactId}`)
+      .set("Authorization", `Bearer ${secondAccessToken}`);
+    expect(beforeForbiddenUpdate.status).toBe(200);
+
+    const forbiddenUpdate = await request(app)
+      .patch(`/api/v1/admin/contacts/${secondPrivateContactId}`)
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ followUpStatus: "ARCHIVED", discussionNotes: "Cross-admin write attempt" });
+    expect(forbiddenUpdate.status).toBe(404);
+
+    const afterForbiddenUpdate = await request(app)
+      .get(`/api/v1/admin/contacts/${secondPrivateContactId}`)
+      .set("Authorization", `Bearer ${secondAccessToken}`);
+    expect(afterForbiddenUpdate.status).toBe(200);
+    expect(afterForbiddenUpdate.body.data.followUpStatus).toBe(beforeForbiddenUpdate.body.data.followUpStatus);
+    expect(afterForbiddenUpdate.body.data.discussionNotes).toBe(beforeForbiddenUpdate.body.data.discussionNotes);
   });
 
 });
