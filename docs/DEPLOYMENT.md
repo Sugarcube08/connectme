@@ -8,7 +8,13 @@ For the Vercel-first API deployment path, see [Deploy the Connect Me API to Verc
 
 ## 1. Required configuration
 
-Create a deployment-specific `.env` from the safe template:
+For independent local app development, use the app-specific templates:
+- `apps/api/.env.example` → `apps/api/.env`
+- `apps/web/.env.example` → `apps/web/.env`
+
+The API example documents the Prisma MySQL URL shape and required signing keys. The web example contains only the server-side `API_INTERNAL_URL`; it must not receive database credentials or signing secrets.
+
+Create a deployment-specific root `.env` from the safe template for Docker Compose and monorepo-level database tooling:
 
 ```bash
 cp .env.example .env
@@ -22,7 +28,7 @@ openssl rand -hex 32  # use the output for SESSION_SECRET
 openssl rand -hex 32  # run again for JWT_SECRET
 ```
 
-Use a URL-safe password such as random hex for MySQL. `DATABASE_URL` must be a literal MySQL connection string for processes running on the host. Docker Compose constructs a separate container-to-database URL using the configured app user/password and the internal `mysql` hostname.
+Use a URL-safe password such as random hex for Compose-based MySQL credentials. A Prisma MySQL URL has the form `mysql://USER:PASSWORD@HOST:3306/DATABASE`. Reserved characters in usernames, passwords, database names, and URL option values must be percent-encoded. The API validates the URL's scheme, credentials, host, port, database path, and percent-encoding before startup. `DATABASE_URL` must be a literal MySQL connection string for processes running on the host. Docker Compose constructs a separate container-to-database URL using the configured app user/password and the internal `mysql` hostname.
 
 | Variable | Required | Used by | Purpose |
 |---|---|---|---|
