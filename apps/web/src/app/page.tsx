@@ -13,7 +13,7 @@ export default function HomePage() {
     let active = true;
     apiClient.getMe()
       .then((response) => {
-        if (active) setAuthenticated(response.success);
+        if (active) setAuthenticated(Boolean(response.success && response.data?.user?.isActive));
       })
       .catch(() => {
         if (active) setAuthenticated(false);
