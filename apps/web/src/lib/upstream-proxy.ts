@@ -47,6 +47,11 @@ export async function proxyToApi(request: NextRequest, apiPath: string): Promise
   headers.delete("host");
   headers.delete("content-length");
   headers.delete("connection");
+  // This is a server-to-server hop. Strip browser CORS metadata, but pass the
+  // original public web origin for QR URL generation by the API.
+  headers.delete("origin");
+  headers.delete("x-connectme-public-origin");
+  headers.set("x-connectme-public-origin", incoming.origin);
 
   const init: RequestInit = {
     method: request.method,
