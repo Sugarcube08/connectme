@@ -48,10 +48,21 @@ export class ContactRepository {
     return { items, total };
   }
 
-  async update(id: string, data: { followUpStatus?: FollowUpStatus; discussionNotes?: string }) {
-    return prisma.contactSubmission.update({
-      where: { id },
+  async update(
+    id: string,
+    adminUserId: string,
+    data: { followUpStatus?: FollowUpStatus; discussionNotes?: string }
+  ) {
+    // Include ownership in the mutation itself rather than relying on a prior
+    // read-only authorization check. This keeps the boundary fail-closed.
+    const result = await prisma.contactSubmission.updateMany({
+      where: { id, ...ownerFilter(adminUserId) },
       data,
+    });
+    if (result.count !== 1) return null;
+
+    return prisma.contactSubmission.findFirst({
+      where: { id, ...ownerFilter(adminUserId) },
       include: {
         accessCode: { select: { label: true } },
         image: { select: { id: true, mime: true, size: true } },
