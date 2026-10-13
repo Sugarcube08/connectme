@@ -16,6 +16,8 @@ Connect Me is a pnpm/Turborepo TypeScript monorepo. Express is the authoritative
 
 **One public origin:** Keep API and web as separate processes. Next.js proxies `/api/v1/*`, `/health/*`, and `/api/docs/*` to the Express API using runtime, server-only `API_INTERNAL_URL`. This is the default combined public deployment mode.
 
+**Docker Compose profiles:** Use `docker compose --profile api up --build -d api` for API + PostgreSQL only, `docker compose --profile web up --build -d web` for a web container whose API is hosted elsewhere, or `docker compose --profile combined up --build -d` for both app services together. In web-only mode, set `COMPOSE_API_INTERNAL_URL` to an API URL reachable from inside the web container. The legacy `app` profile still launches both app services.
+
 **Independently hosted services:** Build/deploy `apps/api` and `apps/web` independently. Configure `API_INTERNAL_URL` on the web service to the API origin/private service address. For direct browser-to-API calls across origins, set `NEXT_PUBLIC_API_BASE_URL` at web build time and allow the exact web origin in API `CORS_ORIGIN`. Native mobile uses `EXPO_PUBLIC_API_URL`.
 
 ## Environment configuration
