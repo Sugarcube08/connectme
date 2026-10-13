@@ -38,10 +38,10 @@ The API remains a separate process even when web and API are presented under one
 |---|---|
 | Local development | Express on `localhost:4000`, Next.js on `localhost:3000`, MySQL on `localhost:3306`. |
 | Combined public origin | Express and Next.js remain separate processes; Next.js proxies `/api/v1/*`, `/health/*`, and `/api/docs/*` using server-only `API_INTERNAL_URL`. |
-| API-only Compose profile | `--profile api` starts PostgreSQL and Express without starting Next.js. |
+| API-only Compose profile | `--profile api` starts MySQL and Express without starting Next.js. |
 | Web-only Compose profile | `--profile web` starts Next.js without a local API or database; configure `COMPOSE_API_INTERNAL_URL` to an API reachable from the web container. |
-| Combined Compose profile | `--profile combined` starts PostgreSQL, API, and web together. The legacy `app` profile remains available. |
-| Independently hosted services | API and web can be built/deployed as separate targets. Configure the web server's `API_INTERNAL_URL` to the API. For direct browser-to-API requests, set `NEXT_PUBLIC_API_BASE_URL` at web build time and allow the exact web origin in API CORS. |
+| Combined Compose profile | `--profile combined` starts MySQL, API, and web together. The legacy `app` profile remains available. |
+| Independently hosted services | API and web can be built/deployed as separate targets. Configure the web server's `API_INTERNAL_URL` to the API. Browser requests always use the same-origin Next.js proxy; `API_INTERNAL_URL` is server-only and does not need CORS configuration. |
 
 The runtime proxy preserves request bodies, cookies and binary responses. It supports CSV exports and contact images without loading image bytes into the web app.
 
@@ -118,7 +118,7 @@ For a physical phone, set `EXPO_PUBLIC_API_URL` to an API address reachable from
 
 ## Combined Docker deployment
 
-Fill in the required `.env` values and replace local origins with the real public HTTPS origin before production deployment.
+Fill in database credentials and signing secrets in `.env`; use the real public HTTPS website origin for `NEXT_PUBLIC_APP_URL` in production.
 
 ```bash
 # Apply schema migrations before starting the application.
