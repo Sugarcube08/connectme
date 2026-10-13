@@ -24,13 +24,13 @@ if (testDatabaseUrl) {
 } else {
   const configuredUrl = process.env.DATABASE_URL?.trim();
   if (!configuredUrl) {
-    throw new Error("Set TEST_DATABASE_URL to an isolated PostgreSQL test database before running API tests.");
+    throw new Error("Set TEST_DATABASE_URL to an isolated MySQL test database before running API tests.");
   }
   let databaseName = "";
   try {
     databaseName = new URL(configuredUrl).pathname.replace(/^\//, "");
   } catch {
-    throw new Error("DATABASE_URL is not a valid URL. Set TEST_DATABASE_URL to a valid isolated PostgreSQL database.");
+    throw new Error("DATABASE_URL is not a valid URL. Set TEST_DATABASE_URL to a valid isolated MySQL database.");
   }
   if (!/(?:_test|_testing)$/i.test(databaseName)) {
     throw new Error("Refusing to run destructive API tests against a non-test database. Set TEST_DATABASE_URL to a database ending in _test.");
