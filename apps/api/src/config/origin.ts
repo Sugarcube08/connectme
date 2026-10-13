@@ -6,7 +6,7 @@ const isProduction = () => process.env.NODE_ENV === "production";
  * Accept only a bare HTTP(S) origin. Production public origins must use HTTPS.
  * This deliberately rejects paths, credentials, query strings and fragments.
  */
-function normalizeOrigin(value: string | undefined | null): string | null {
+export function normalizeOrigin(value: string | undefined | null): string | null {
   if (!value?.trim()) return null;
 
   try {
