@@ -19,6 +19,9 @@ if (loadEnvFile) {
 // API integration tests delete database rows. Prefer TEST_DATABASE_URL and never
 // silently run them against a non-test database.
 const testDatabaseUrl = process.env.TEST_DATABASE_URL?.trim();
+if (testDatabaseUrl && !testDatabaseUrl.startsWith("mysql://")) {
+  throw new Error("TEST_DATABASE_URL must be a MySQL URL beginning with mysql://.");
+}
 if (testDatabaseUrl) {
   process.env.DATABASE_URL = testDatabaseUrl;
 } else {
