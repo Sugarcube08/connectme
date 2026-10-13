@@ -1,8 +1,7 @@
-import { createApp } from "./app";
+import app from "./app";
 import { config } from "./config/env";
 import { prisma } from "@connectme/database";
 
-const app = createApp();
 
 const server = app.listen(config.PORT, () => {
   console.log(`\n============================================================`);

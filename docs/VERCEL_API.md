@@ -39,7 +39,7 @@ For the web dashboard, keep the browser API base URL empty so browser requests g
 
 ## 2. Build and deploy the API project
 
-Connect `Sugarcube08/connectme` to Vercel and configure a dedicated API project with **Root Directory = `apps/api`**. Keep the monorepo's files outside the app directory available to the build (the workspace lockfile and `packages/*` are required). The Vercel entry point is `apps/api/src/index.ts`, which default-exports the Express app; `src/server.ts` remains the normal Node/Docker listener.
+Connect `Sugarcube08/connectme` to Vercel and configure a dedicated API project with **Root Directory = `apps/api`**. Keep the monorepo's files outside the app directory available to the build (the workspace lockfile and `packages/*` are required). Vercel detects Express applications via `app.{js,ts}` or `index.{js,ts}`; both `apps/api/src/app.ts` and `apps/api/src/index.ts` export the Express app instance as their default export. `src/server.ts` remains the normal Node/Docker listener.
 
 Use this build command in the API project's Build & Development Settings so Prisma Client and workspace dependencies are built before the API:
 
@@ -85,7 +85,16 @@ After deployment, replace the hostname below with the API's actual Vercel domain
 
 If liveness succeeds but readiness returns `503`, verify the MySQL URL, provider network/access settings, and applied migration status.
 
-### Troubleshooting: runtime still requires legacy origin variables
+### Troubleshooting: invalid export found in module app.js
+ 
+If a Vercel runtime log says `Invalid export found in module ".../apps/api/src/app.js". The default export must be a function or server`:
+ 
+- Vercel scans for Express entrypoints and prioritizes `app.{js,ts}` ahead of `index.{js,ts}`.
+- Both `apps/api/src/app.ts` and `apps/api/src/index.ts` export the Express application as the default export.
+- Ensure the deployment is on the latest `main` commit that includes the default export in `apps/api/src/app.ts`, and redeploy with build cache cleared if needed.
+ 
+ ### Troubleshooting: runtime still requires legacy origin variables
+
 
 If a Vercel runtime log says `Missing required production environment values: CORS_ORIGIN, QR_CANONICAL_ORIGIN`, that function is running an older API bundle. The current `apps/api/src/config/env.ts` does not declare or require either variable. **Do not restore the obsolete variables to mask the error.**
 
