@@ -76,7 +76,7 @@ pnpm db:migrate
 Create the separate test database once (replace the role name with the one you configured):
 
 ```bash
-docker compose exec mysql sh -lc 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -e "CREATE DATABASE IF NOT EXISTS connectme_test;"'
+docker compose exec mysql sh -lc "mysql -uroot -p\"\$MYSQL_ROOT_PASSWORD\" -e \"CREATE DATABASE IF NOT EXISTS connectme_test; GRANT ALL PRIVILEGES ON connectme_test.* TO '\''\$MYSQL_USER'\''@'\''%'\'';\""
 DATABASE_URL='mysql://<user>:<password>@localhost:3306/connectme_test' pnpm db:migrate
 ```
 
@@ -142,7 +142,7 @@ docker compose --profile api up --build -d api
 docker compose --profile web up --build -d web
 ```
 
-By default Compose binds published ports to loopback, so a host reverse proxy can expose HTTPS without directly exposing the containers. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for deployment layouts, exact environment roles, operational commands and security considerations.
+By default Compose binds published ports to loopback, so a host reverse proxy can expose HTTPS without directly exposing the containers. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for deployment layouts and [docs/VERCEL_API.md](docs/VERCEL_API.md) for deploying the API to Vercel with MySQL and auto-derived origins.
 
 ## Tests and checks
 
