@@ -51,7 +51,8 @@ export class ConnectMeApiClient {
     if (this.clientType) headers.set("X-ConnectMe-Client", this.clientType);
     if (this.getToken) {
       const savedToken = await this.getToken();
-      const token = savedToken || freshToken;
+      // A token supplied by the refresh flow must override the stale persisted access token.
+      const token = freshToken || savedToken;
       if (token) headers.set("Authorization", `Bearer ${token}`);
     }
     return fetch(`${this.baseUrl}/api/v1${endpoint}`, {
@@ -61,7 +62,24 @@ export class ConnectMeApiClient {
     });
   }
 
+  private refreshInFlight: Promise<string | null> | null = null;
+
   private async refreshAccessToken(): Promise<string | null> {
+    // A burst of requests can all receive 401 after the same access JWT expires.
+    // Share one refresh operation so those requests do not replay a rotating
+    // refresh token and accidentally trigger server-side replay revocation.
+    if (this.refreshInFlight) return this.refreshInFlight;
+
+    const pending = this.performRefreshAccessToken();
+    this.refreshInFlight = pending;
+    try {
+      return await pending;
+    } finally {
+      if (this.refreshInFlight === pending) this.refreshInFlight = null;
+    }
+  }
+
+  private async performRefreshAccessToken(): Promise<string | null> {
     try {
       const refreshToken = await this.getRefreshToken?.();
       const headers = new Headers({ "Content-Type": "application/json" });
