@@ -27,7 +27,7 @@ for (const candidate of [
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
-  transpilePackages: ["@connectme/contracts", "@connectme/design-tokens"],
+  transpilePackages: ["@connectme/api-client", "@connectme/contracts", "@connectme/design-tokens", "@connectme/validation"],
   experimental: {
     serverActions: {
       bodySizeLimit: "4mb",
