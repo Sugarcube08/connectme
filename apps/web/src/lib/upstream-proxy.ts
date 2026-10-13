@@ -22,9 +22,26 @@ const FORWARDED_RESPONSE_HEADERS = [
  * /api/v1/* without exposing an internal service URL in browser bundles.
  */
 export async function proxyToApi(request: NextRequest, apiPath: string): Promise<Response> {
-  const apiOrigin = (process.env.API_INTERNAL_URL || "http://localhost:4000").replace(/\/+$/, "");
+  const configuredApiOrigin = process.env.API_INTERNAL_URL?.trim();
+  if (!configuredApiOrigin && process.env.NODE_ENV === "production") {
+    return Response.json(
+      { success: false, error: { code: "API_CONFIGURATION_ERROR", message: "The API upstream is not configured." } },
+      { status: 500, headers: { "Cache-Control": "no-store" } }
+    );
+  }
+
+  const apiOrigin = (configuredApiOrigin || "http://localhost:4000").replace(/\/+$/, "");
   const incoming = new URL(request.url);
-  const target = new URL(`${apiPath}${incoming.search}`, apiOrigin);
+  let target: URL;
+  try {
+    target = new URL(`${apiPath}${incoming.search}`, apiOrigin);
+    if (target.protocol !== "http:" && target.protocol !== "https:") throw new Error("Unsupported API protocol");
+  } catch {
+    return Response.json(
+      { success: false, error: { code: "API_CONFIGURATION_ERROR", message: "The API upstream URL is invalid." } },
+      { status: 500, headers: { "Cache-Control": "no-store" } }
+    );
+  }
 
   const headers = new Headers(request.headers);
   headers.delete("host");
