@@ -19,6 +19,7 @@ function SetupContent() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [bootstrapPending, setBootstrapPending] = useState<boolean | null>(null);
+  const [bootstrapExpired, setBootstrapExpired] = useState(false);
   // Form Fields
   const [token, setToken] = useState("");
   const [username, setUsername] = useState("");
@@ -36,6 +37,7 @@ function SetupContent() {
         const res = await apiClient.getBootstrapStatus();
         if (res.success && res.data) {
           setBootstrapPending(res.data.isBootstrapPending);
+          setBootstrapExpired(Boolean(res.data.hasExpired));
         }
       } catch {
         setError("Could not communicate with the API server.");
@@ -146,6 +148,12 @@ function SetupContent() {
           <div className="mb-6 flex items-start gap-3 rounded-xl border border-red-500/30 bg-red-500/10 p-3.5 text-xs text-red-200">
             <AlertCircle className="h-4 w-4 shrink-0 text-red-400" />
             <span>{error}</span>
+          </div>
+        )}
+
+        {bootstrapExpired && (
+          <div className="mb-5 rounded-xl border border-metallicGold/30 bg-metallicGold/10 p-3.5 text-xs leading-relaxed text-warmIvory">
+            This setup token has expired. An authorized operator must run <code className="font-mono text-metallicGold">pnpm db:bootstrap:rotate</code>, then share the newly generated token with you. Your username and password are not changed or preconfigured by this process.
           </div>
         )}
 

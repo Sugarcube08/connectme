@@ -1,0 +1,91 @@
+name: CI
+
+on:
+  push:
+    branches: ["main", "feat/**", "fix/**"]
+  pull_request:
+    branches: ["main"]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: connectme_test
+          POSTGRES_DB: connectme_test
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U connectme_test -d connectme_test"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://connectme_test@localhost:5432/connectme_test
+      TEST_DATABASE_URL: postgresql://connectme_test@localhost:5432/connectme_test
+      CI: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Configure pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@12.11.2 --activate
+          pnpm --version
+
+      - name: Generate ephemeral test signing keys
+        shell: bash
+        run: |
+          echo "SESSION_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+          echo "JWT_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm db:generate
+
+      - name: Apply checked-in migrations
+        run: pnpm db:migrate
+
+      - name: Run API integration tests
+        run: pnpm test
+
+      - name: Type-check workspaces
+        run: pnpm typecheck
+
+      - name: Build workspaces
+        run: pnpm build
+
+      - name: Validate Docker Compose configuration
+        shell: bash
+        run: |
+          export POSTGRES_USER=connectme_test
+          export POSTGRES_PASSWORD="$(openssl rand -hex 24)"
+          export POSTGRES_DB=connectme_test
+          export SESSION_SECRET="$(openssl rand -hex 32)"
+          export JWT_SECRET="$(openssl rand -hex 32)"
+          export CORS_ORIGIN=https://connectme.example.test
+          export QR_CANONICAL_ORIGIN=https://connectme.example.test
+          export NEXT_PUBLIC_APP_URL=https://connectme.example.test
+          docker compose config --quiet
+
+      - name: Build API container target
+        run: docker build --target api -t connectme-api-ci .
+
+      - name: Build web container target
+        run: docker build --target web -t connectme-web-ci .
