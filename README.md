@@ -37,8 +37,11 @@ The API remains a separate process even when web and API are presented under one
 | Mode | How it works |
 |---|---|
 | Local development | Express on `localhost:4000`, Next.js on `localhost:3000`, PostgreSQL on `localhost:5432`. |
-| Combined public origin | Next.js serves the website and proxies `/api/v1/*`, `/health/*`, and `/api/docs/*` to Express using server-only `API_INTERNAL_URL`. |
-| Independent services | Deploy API and web as separate services. Configure `API_INTERNAL_URL` on the web service. Optionally set `NEXT_PUBLIC_API_BASE_URL` at web build time to have browsers call a separately exposed API origin directly. |
+| Combined public origin | Express and Next.js remain separate processes; Next.js proxies `/api/v1/*`, `/health/*`, and `/api/docs/*` using server-only `API_INTERNAL_URL`. |
+| API-only Compose profile | `--profile api` starts PostgreSQL and Express without starting Next.js. |
+| Web-only Compose profile | `--profile web` starts Next.js without a local API or database; configure `COMPOSE_API_INTERNAL_URL` to an API reachable from the web container. |
+| Combined Compose profile | `--profile combined` starts PostgreSQL, API, and web together. The legacy `app` profile remains available. |
+| Independently hosted services | API and web can be built/deployed as separate targets. Configure the web server's `API_INTERNAL_URL` to the API. For direct browser-to-API requests, set `NEXT_PUBLIC_API_BASE_URL` at web build time and allow the exact web origin in API CORS. |
 
 The runtime proxy preserves request bodies, cookies and binary responses. It supports CSV exports and contact images without loading image bytes into the web app.
 
@@ -125,7 +128,18 @@ docker compose --profile tools run --rm migrate
 docker compose --profile tools run --rm bootstrap
 
 # Launch API + web behind one public web origin.
-docker compose --profile app up --build -d
+docker compose --profile combined up --build -d
+```
+
+To run just one application tier through Compose, use one of these profiles instead of `combined`:
+
+```bash
+# API + PostgreSQL; no Next.js web container
+docker compose --profile api up --build -d api
+
+# Next.js web only; set COMPOSE_API_INTERNAL_URL in .env to an API
+# address resolvable from inside the web container before running this command.
+docker compose --profile web up --build -d web
 ```
 
 By default Compose binds published ports to loopback, so a host reverse proxy can expose HTTPS without directly exposing the containers. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for deployment layouts, exact environment roles, operational commands and security considerations.
