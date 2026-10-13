@@ -22,7 +22,7 @@ Connect Me is a pnpm/Turborepo TypeScript monorepo. Express is the authoritative
 
 ## Environment configuration
 
-1. Copy `.env.example` to `.env`.
+1. Copy the root `.env.example` for Compose/tooling. For independent app processes, copy `apps/api/.env.example` to `apps/api/.env` and `apps/web/.env.example` to `apps/web/.env`.
 2. Choose `MYSQL_ROOT_PASSWORD`, `MYSQL_USER`, `MYSQL_PASSWORD`, and `MYSQL_DATABASE`.
 3. Set `DATABASE_URL` to a literal URL usable from the host process (usually hostname `localhost`).
 4. Set `TEST_DATABASE_URL` to a separate database ending in `_test`.
@@ -31,7 +31,7 @@ Connect Me is a pnpm/Turborepo TypeScript monorepo. Express is the authoritative
 
 There are no configured administrator credentials and no production fallback signing keys. The API fails fast if its database URL or signing secrets are missing/too short. CORS derives same-origin/Vercel hosts automatically. QR generation uses the public origin from the Next.js proxy, then Vercel deployment metadata/request host as a fallback.
 
-Do not commit `.env`. Environment examples must contain no real credentials. Database passwords should use URL-safe characters, such as random hex, when embedded in `DATABASE_URL`.
+Do not commit `.env`. Environment examples must contain no real credentials. Database passwords should use URL-safe characters, such as random hex, when embedded in `DATABASE_URL`. Prisma MySQL URLs must use the form `mysql://USER:PASSWORD@HOST:3306/DATABASE`. Special characters in usernames/passwords and other URL components must be percent-encoded (for example, `@` becomes `%40`, `:` becomes `%3A`, `%` becomes `%25`). The API validates the scheme, credentials, host, database path, port, and percent-encoding before starting.
 
 ## Local setup
 
