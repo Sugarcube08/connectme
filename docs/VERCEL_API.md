@@ -93,4 +93,4 @@ API_INTERNAL_URL=https://<your-api-vercel-domain>
 
 Keep the browser client on the same-origin proxy and do not set a direct public API URL. The web proxy removes browser CORS metadata and sends its own public origin so generated QR codes point to the web app, not to the API project's domain.
 
-Native mobile can call the API's public Vercel domain through `EXPO_PUBLIC_API_URL`. Since a direct mobile request has no web-origin context, QR codes created directly from mobile fall back to the API's Vercel production domain. If mobile-generated QR codes must use a separate web domain, send code-generation requests through the web proxy or introduce an explicit, validated app-origin mechanism in a later change.
+Native mobile can call the API's public Vercel domain through `EXPO_PUBLIC_API_URL`. Because successful first-admin setup persists the web origin in MySQL, mobile code-generation requests without browser-origin headers use the same website origin. Vercel deployment metadata is only the fallback if the initial setup did not pass through the web proxy.
