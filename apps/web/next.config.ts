@@ -1,5 +1,7 @@
 import type { NextConfig } from "next";
 
+const apiOrigin = (process.env.API_INTERNAL_URL || "http://localhost:4000").replace(/\/+$/, "");
+
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   transpilePackages: ["@connectme/contracts", "@connectme/design-tokens"],
@@ -9,12 +11,12 @@ const nextConfig: NextConfig = {
     },
   },
   async rewrites() {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+    // /api/v1/* is handled by a runtime Route Handler proxy (not a build-time rewrite)
+    // so API_INTERNAL_URL can change independently of the web image.
     return [
-      {
-        source: "/api/v1/:path*",
-        destination: `${apiUrl}/api/v1/:path*`,
-      },
+      { source: "/health/:path*", destination: `${apiOrigin}/health/:path*` },
+      { source: "/api/docs", destination: `${apiOrigin}/api/docs` },
+      { source: "/api/docs/:path*", destination: `${apiOrigin}/api/docs/:path*` },
     ];
   },
 };
