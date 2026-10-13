@@ -32,6 +32,32 @@ export async function proxyToApi(request: NextRequest, apiPath: string): Promise
 
   const apiOrigin = (configuredApiOrigin || "http://localhost:4000").replace(/\/+$/, "");
   const incoming = new URL(request.url);
+  const safeMethods = new Set(["GET", "HEAD", "OPTIONS"]);
+  const origin = request.headers.get("origin");
+  const fetchSite = request.headers.get("sec-fetch-site");
+
+  // Cookie-authenticated browser writes must originate from this exact web
+  // origin. SameSite cookies alone do not protect against hostile sibling
+  // subdomains; the API sees a server-to-server request after this proxy.
+  if (!safeMethods.has(request.method.toUpperCase())) {
+    if (fetchSite === "cross-site") {
+      return Response.json(
+        { success: false, error: { code: "CSRF_ORIGIN_DENIED", message: "Cross-site state-changing requests are not allowed." } },
+        { status: 403, headers: { "Cache-Control": "no-store" } }
+      );
+    }
+    if (origin) {
+      try {
+        if (new URL(origin).origin !== incoming.origin) throw new Error("Origin mismatch");
+      } catch {
+        return Response.json(
+          { success: false, error: { code: "CSRF_ORIGIN_DENIED", message: "State-changing requests must originate from this website." } },
+          { status: 403, headers: { "Cache-Control": "no-store" } }
+        );
+      }
+    }
+  }
+
   let target: URL;
   try {
     target = new URL(`${apiPath}${incoming.search}`, apiOrigin);
