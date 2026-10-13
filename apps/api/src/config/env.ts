@@ -6,6 +6,8 @@ import { isValidMySqlUrl } from "./mysql-url";
 
 // Respect process/Vercel/CI variables first. For files, a non-empty workspace-local
 // value wins; an empty template placeholder falls back to the root .env.
+// CORS_ORIGIN and QR_CANONICAL_ORIGIN are intentionally not runtime requirements:
+// CORS is derived from the request/deployment host, and QR origin comes from the web proxy.
 const environmentProvidedByProcess = new Set(Object.keys(process.env));
 
 function loadEnvFallback(fileName: string): void {
