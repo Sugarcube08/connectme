@@ -8,6 +8,7 @@ import sharp from "sharp";
 
 const app = createApp();
 const testUsername = `test-${randomBytes(6).toString("hex")}`;
+let activeTestUsername = testUsername;
 const testPassword = `${randomBytes(18).toString("base64url")}A1`;
 
 beforeAll(async () => {
@@ -41,11 +42,14 @@ describe("Controlled First-Admin Bootstrap Workflow", () => {
     const provisionResult = await bootstrapAdmin();
     expect(provisionResult.bootstrapToken).toBeDefined();
     bootstrapToken = provisionResult.bootstrapToken;
+    expect(provisionResult.setupUrl).toMatch(/\\/setup$/);
+    expect(provisionResult.setupUrl).not.toContain(bootstrapToken);
 
     // Verify GET /api/v1/auth/bootstrap/status reflects pending state
     const statusRes = await request(app).get("/api/v1/auth/bootstrap/status");
     expect(statusRes.status).toBe(200);
     expect(statusRes.body.data.isBootstrapPending).toBe(true);
+    expect(statusRes.body.data.username).toBeUndefined();
   });
 
   it("completes first-admin bootstrap and locks setup permanently", async () => {
@@ -54,22 +58,34 @@ describe("Controlled First-Admin Bootstrap Workflow", () => {
       .post("/api/v1/auth/bootstrap/setup")
       .send({
         token: "invalid-token-12345",
-        username: testUsername,
+        username: activeTestUsername,
         password: testPassword,
-        displayName: "Harsh Devcon",
+        displayName: "Test Admin",
       });
     expect(failRes.status).toBe(401);
 
-    // Complete setup with valid one-time token
-    const successRes = await request(app)
-      .post("/api/v1/auth/bootstrap/setup")
-      .send({
-        token: bootstrapToken,
-        username: testUsername,
-        password: testPassword,
-        displayName: "Harsh Devcon",
-      });
-    expect(successRes.status).toBe(200);
+    // Concurrent requests with the same one-time token must yield one activation only.
+    const candidateUsernames = [`${testUsername}-a`, `${testUsername}-b`];
+    const setupResults = await Promise.all(
+      candidateUsernames.map((candidate) =>
+        request(app)
+          .post("/api/v1/auth/bootstrap/setup")
+          .send({
+            token: bootstrapToken,
+            username: candidate,
+            password: testPassword,
+            displayName: "Test Admin",
+          })
+      )
+    );
+    const successes = setupResults.filter((response) => response.status === 200);
+    expect(successes).toHaveLength(1);
+    expect(setupResults.filter((response) => response.status !== 200)).toHaveLength(1);
+
+    const successIndex = setupResults.findIndex((response) => response.status === 200);
+    activeTestUsername = candidateUsernames[successIndex];
+    const successRes = successes[0];
+    expect(successRes.body.data.user.username).toBe(activeTestUsername);
     expect(successRes.body.data.user.isActive).toBe(true);
     expect(successRes.body.data.user.isBootstrapPending).toBe(false);
     expect(successRes.body.data.token).toBeDefined();
@@ -84,7 +100,7 @@ describe("Controlled First-Admin Bootstrap Workflow", () => {
       .post("/api/v1/auth/bootstrap/setup")
       .send({
         token: bootstrapToken,
-        username: testUsername,
+        username: activeTestUsername,
         password: testPassword,
       });
     expect(replayRes.status).toBe(401);
@@ -95,8 +111,8 @@ describe("Controlled First-Admin Bootstrap Workflow", () => {
     const wrongRes = await request(app)
       .post("/api/v1/auth/login")
       .send({
-        username: testUsername,
-        password: "WrongPassword999!",
+        username: activeTestUsername,
+        password: `${testPassword}wrong`,
       });
     expect(wrongRes.status).toBe(401);
 
@@ -104,7 +120,7 @@ describe("Controlled First-Admin Bootstrap Workflow", () => {
     const loginRes = await request(app)
       .post("/api/v1/auth/login")
       .send({
-        username: testUsername,
+        username: activeTestUsername,
         password: testPassword,
       });
     expect(loginRes.status).toBe(200);
@@ -120,7 +136,7 @@ describe("Core Operations: Code Generation, Atomic Single-Use Redemption & Concu
     const loginRes = await request(app)
       .post("/api/v1/auth/login")
       .send({
-        username: testUsername,
+        username: activeTestUsername,
         password: testPassword,
       });
     adminToken = loginRes.body.data.token;
