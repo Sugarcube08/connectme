@@ -17,7 +17,7 @@ RUN pnpm install --frozen-lockfile
 # Use throwaway random build-only values; runtime credentials are injected by the platform.
 RUN BUILD_DB_USER="$(node -e 'process.stdout.write(require("node:crypto").randomBytes(12).toString("hex"))')" \
  && BUILD_DB_PASS="$(node -e 'process.stdout.write(require("node:crypto").randomBytes(24).toString("hex"))')" \
- && export DATABASE_URL="postgresql://${BUILD_DB_USER}:${BUILD_DB_PASS}@127.0.0.1:5432/build_only" \
+ && export DATABASE_URL="mysql://${BUILD_DB_USER}:${BUILD_DB_PASS}@127.0.0.1:3306/build_only" \
  && pnpm db:generate \
  && pnpm build
 
