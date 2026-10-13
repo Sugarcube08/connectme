@@ -26,7 +26,7 @@ describe("Express API MVC - Health Endpoints", () => {
     expect(res.body.status).toBe("ok");
   });
 
-  it("GET /health/ready confirms PostgreSQL connection", async () => {
+  it("GET /health/ready confirms MySQL connection", async () => {
     const res = await request(app).get("/health/ready");
     expect(res.status).toBe(200);
     expect(res.body.status).toBe("ok");
@@ -148,10 +148,12 @@ describe("Core Operations: Code Generation, Atomic Single-Use Redemption & Concu
     const genRes = await request(app)
       .post("/api/v1/admin/codes")
       .set("Authorization", `Bearer ${adminToken}`)
+      .set("x-connectme-public-origin", "https://connectme.example.test")
       .send({ label: "Devcon Booth Alpha" });
 
     expect(genRes.status).toBe(201);
     const code = genRes.body.data;
+    expect(code.url).toBe(`https://connectme.example.test/${code.token}`);
     expect(code.token).toBeDefined();
     expect(code.token.length).toBe(22);
     expect(code.qrDataUrl.startsWith("data:image/png;base64,")).toBe(true);
