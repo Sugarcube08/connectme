@@ -46,7 +46,7 @@ export class CodesController {
           data: { count: codes.length, codes },
         });
       } else {
-        const code = await this.tokenService.createSingle({ label, expiresAt, publicOrigin: resolvePublicOrigin(req) });
+        const code = await this.tokenService.createSingle({ label, expiresAt, publicOrigin: await this.publicOriginService.resolve(req) });
         return res.status(201).json({
           success: true,
           data: code,
