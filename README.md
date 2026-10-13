@@ -8,8 +8,8 @@ Connect Me is a lightweight, single-use QR contact-capture system for in-person 
 
 - Public pages never disclose the owner's phone, email, vCard, social links, or personal identity.
 - No reciprocal contact exchange, public attendee directory, attendee login, OTP, SMS, or AI service is required.
-- Each access token can be redeemed once. Redemption is atomic in PostgreSQL, including under concurrent requests.
-- Optional profile images are normalized and stored in a separate PostgreSQL `BYTEA` table.
+- Each access token can be redeemed once. Redemption is atomic in MySQL, including under concurrent requests.
+- Optional profile images are normalized and stored in a separate MySQL `LONGBLOB` table.
 - The owner chooses their own administrator username and password during first-time setup. There are no preset admin credentials.
 
 ## Architecture
@@ -20,7 +20,7 @@ apps/
   web/       Next.js — mobile-first public form and administrator dashboard
   mobile/    React Native + Expo — mobile administrator client
 packages/
-  database/  PostgreSQL + Prisma schema and managed migrations
+  database/  MySQL + Prisma schema and managed migrations
   api-client/ Shared typed API client
   contracts/ Shared DTOs and API response types
   validation/Shared Zod validation schemas
@@ -36,7 +36,7 @@ The API remains a separate process even when web and API are presented under one
 
 | Mode | How it works |
 |---|---|
-| Local development | Express on `localhost:4000`, Next.js on `localhost:3000`, PostgreSQL on `localhost:5432`. |
+| Local development | Express on `localhost:4000`, Next.js on `localhost:3000`, MySQL on `localhost:3306`. |
 | Combined public origin | Express and Next.js remain separate processes; Next.js proxies `/api/v1/*`, `/health/*`, and `/api/docs/*` using server-only `API_INTERNAL_URL`. |
 | API-only Compose profile | `--profile api` starts PostgreSQL and Express without starting Next.js. |
 | Web-only Compose profile | `--profile web` starts Next.js without a local API or database; configure `COMPOSE_API_INTERNAL_URL` to an API reachable from the web container. |
@@ -53,21 +53,21 @@ The runtime proxy preserves request bodies, cookies and binary responses. It sup
 cp .env.example .env
 ```
 
-Edit `.env`. Choose a PostgreSQL role name and password; use URL-safe random hex for the password. Generate **different** signing secrets for sessions and mobile JWTs:
+Edit `.env`. Choose a MySQL application user/password and a distinct root password; use URL-safe random hex for the passwords. Generate **different** signing secrets for sessions and mobile JWTs:
 
 ```bash
-openssl rand -hex 24  # paste output into POSTGRES_PASSWORD
+openssl rand -hex 24  # paste output into MYSQL_ROOT_PASSWORD
 openssl rand -hex 32  # paste output into SESSION_SECRET
 openssl rand -hex 32  # run again; paste output into JWT_SECRET
-openssl rand -hex 24  # optionally use as a test DB password if needed
+openssl rand -hex 24  # paste output into MYSQL_PASSWORD
 ```
 
-Set `DATABASE_URL` to a literal local PostgreSQL URL using your chosen role/password and the database `connectme`. Set `TEST_DATABASE_URL` to a separate database whose name ends in `_test` (for example, `connectme_test`). Do not leave required values blank. Never commit `.env`.
+Set `DATABASE_URL` to a literal local MySQL URL using your chosen application user/password, such as `mysql://<user>:<password>@localhost:3306/connectme`. Set `TEST_DATABASE_URL` to a separate MySQL database whose name ends in `_test` (for example, `mysql://<user>:<password>@localhost:3306/connectme_test`). Do not leave required values blank. Never commit `.env`.
 
-### 2. Start PostgreSQL and install dependencies
+### 2. Start MySQL and install dependencies
 
 ```bash
-docker compose up -d postgres
+docker compose up -d mysql
 pnpm install
 pnpm db:generate
 pnpm db:migrate
@@ -76,11 +76,11 @@ pnpm db:migrate
 Create the separate test database once (replace the role name with the one you configured):
 
 ```bash
-docker compose exec postgres sh -lc 'createdb -U "$POSTGRES_USER" connectme_test'
-DATABASE_URL='<your-connectme-test-database-url>' pnpm db:migrate
+docker compose exec mysql sh -lc 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -e "CREATE DATABASE IF NOT EXISTS connectme_test;"'
+DATABASE_URL='mysql://<user>:<password>@localhost:3306/connectme_test' pnpm db:migrate
 ```
 
-The second command applies the same Prisma migrations to the isolated test database. Integration tests delete rows and will refuse to run against a database that does not end in `_test` or `_testing`.
+The second command applies the Prisma migrations to the isolated test database. Set `TEST_DATABASE_URL` to this test database URL before running the destructive integration suite. Integration tests delete rows and will refuse to run against a database that does not end in `_test` or `_testing`.
 
 ### 3. Provision the first administrator
 
@@ -134,7 +134,7 @@ docker compose --profile combined up --build -d
 To run just one application tier through Compose, use one of these profiles instead of `combined`:
 
 ```bash
-# API + PostgreSQL; no Next.js web container
+# API + MySQL; no Next.js web container
 docker compose --profile api up --build -d api
 
 # Next.js web only; set COMPOSE_API_INTERNAL_URL in .env to an API
