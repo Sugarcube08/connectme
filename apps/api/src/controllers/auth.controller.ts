@@ -22,7 +22,7 @@ export class AuthController {
       res.cookie("connectme_session", result.webSession, {
         httpOnly: true,
         secure: config.NODE_ENV === "production",
-        sameSite: "lax",
+        sameSite: config.NODE_ENV === "production" ? "none" : "lax",
         maxAge: 7 * 24 * 3600 * 1000,
         path: "/",
       });
@@ -46,7 +46,7 @@ export class AuthController {
       res.cookie("connectme_session", result.webSession, {
         httpOnly: true,
         secure: config.NODE_ENV === "production",
-        sameSite: "lax",
+        sameSite: config.NODE_ENV === "production" ? "none" : "lax",
         maxAge: 7 * 24 * 3600 * 1000,
         path: "/",
       });
@@ -67,7 +67,7 @@ export class AuthController {
     res.clearCookie("connectme_session", {
       httpOnly: true,
       secure: config.NODE_ENV === "production",
-      sameSite: "lax",
+      sameSite: config.NODE_ENV === "production" ? "none" : "lax",
       path: "/",
     });
 
