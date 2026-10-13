@@ -30,6 +30,7 @@ Use a URL-safe password such as random hex for PostgreSQL. `DATABASE_URL` must b
 | `QR_CANONICAL_ORIGIN` | Required in production | API | Public origin used to construct QR URLs. |
 | `NEXT_PUBLIC_APP_URL` | Yes for bootstrap | Bootstrap CLI | Public web origin; setup links end in `/setup` and do not include the setup token. |
 | `API_INTERNAL_URL` | Yes when web is separate from API | Next.js server | Server-only URL of Express. It is never placed in browser code. |
+| `COMPOSE_API_INTERNAL_URL` | Required for web-only Compose deployments | Docker Compose / web container | Optional override passed to the web container as `API_INTERNAL_URL`; leave blank for combined mode, where the private Compose service URL is used. |
 | `NEXT_PUBLIC_API_BASE_URL` | Optional | Web browser bundle | Public API origin for direct cross-origin browser requests. Leave blank for the recommended same-origin web proxy. This is a build-time public value, not a secret. |
 | `EXPO_PUBLIC_API_URL` | For device/mobile release | Expo app | Public API origin reachable from the mobile device. |
 
