@@ -61,7 +61,23 @@ export class ConnectMeApiClient {
     });
   }
 
+  private refreshInFlight: Promise<{ refreshed: boolean; token?: string }> | null = null;
+
   private async refreshAccessToken(): Promise<{ refreshed: boolean; token?: string }> {
+    // Concurrent API calls can receive 401 together when a JWT expires. Share
+    // the rotating refresh operation to avoid replaying the same refresh token.
+    if (this.refreshInFlight) return this.refreshInFlight;
+
+    const pending = this.performRefreshAccessToken();
+    this.refreshInFlight = pending;
+    try {
+      return await pending;
+    } finally {
+      if (this.refreshInFlight === pending) this.refreshInFlight = null;
+    }
+  }
+
+  private async performRefreshAccessToken(): Promise<{ refreshed: boolean; token?: string }> {
     try {
       const refreshToken = await this.getRefreshToken?.();
       const headers = new Headers({ "Content-Type": "application/json" });
