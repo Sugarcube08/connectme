@@ -115,8 +115,9 @@ describe("Controlled First-Admin Bootstrap Workflow", () => {
     expect(successRes.body.data.user.username).toBe(activeTestUsername);
     expect(successRes.body.data.user.isActive).toBe(true);
     expect(successRes.body.data.user.isBootstrapPending).toBe(false);
-    expect(successRes.body.data.token).toBeDefined();
-    adminToken = successRes.body.data.token;
+    // Browser setup authenticates through HTTP-only cookies, not a JS-readable bearer JWT.
+    expect(successRes.body.data.token).toBeUndefined();
+    expect(successRes.headers["set-cookie"]).toBeDefined();
 
     // Check bootstrap status is now closed
     const statusAfter = await request(app).get("/api/v1/auth/bootstrap/status");
@@ -153,8 +154,22 @@ describe("Controlled First-Admin Bootstrap Workflow", () => {
         password: testPassword,
       });
     expect(loginRes.status).toBe(200);
-    expect(loginRes.body.data.token).toBeDefined();
-    expect(loginRes.headers["set-cookie"]).toBeDefined(); // HTTP-only session cookie
+    expect(loginRes.body.data.token).toBeUndefined();
+    const loginCookies = loginRes.headers["set-cookie"] as string[];
+    expect(loginCookies).toBeDefined();
+    expect(loginCookies.some((cookie) => cookie.startsWith("connectme_session=") && /HttpOnly/i.test(cookie))).toBe(true);
+    expect(loginCookies.some((cookie) => cookie.startsWith("connectme_refresh=") && /HttpOnly/i.test(cookie))).toBe(true);
+    expect(loginCookies.some((cookie) => cookie.startsWith("connectme_session=") && cookie.includes("Max-Age=259200"))).toBe(true);
+    expect(loginCookies.some((cookie) => cookie.startsWith("connectme_refresh=") && cookie.includes("Max-Age=604800"))).toBe(true);
+
+    // Cookie-based web refresh must rotate the refresh cookie without returning a bearer JWT.
+    const cookieHeader = loginCookies.map((cookie) => cookie.split(";")[0]).join("; ");
+    const refreshRes = await request(app)
+      .post("/api/v1/auth/refresh")
+      .set("Cookie", cookieHeader);
+    expect(refreshRes.status).toBe(200);
+    expect(refreshRes.body.data.token).toBeUndefined();
+    expect(refreshRes.headers["set-cookie"]).toBeDefined();
   });
 });
 
@@ -164,6 +179,7 @@ describe("Core Operations: Code Generation, Atomic Single-Use Redemption & Concu
   beforeAll(async () => {
     const loginRes = await request(app)
       .post("/api/v1/auth/login")
+      .set("X-ConnectMe-Client", "mobile")
       .send({
         username: activeTestUsername,
         password: testPassword,
@@ -351,7 +367,9 @@ describe("Core Operations: Code Generation, Atomic Single-Use Redemption & Concu
     const secondCode = secondCodeRes.body.data;
     expect(secondCode.token.length).toBe(43);
     const storedSecondCode = await prisma.accessCode.findUnique({ where: { id: secondCode.id } });
+    expect(storedSecondCode?.createdByAdminId).toBe(provisionRes.body.data.user.id);
     expect(storedSecondCode?.tokenHash).toMatch(/^hmac-sha256:/);
+    expect(storedSecondCode?.tokenHash).not.toContain(secondCode.token);
     expect(storedSecondCode?.tokenHash).not.toBe(createHash("sha256").update(secondCode.token).digest("hex"));
 
     const secondCodes = await request(app)
@@ -379,16 +397,34 @@ describe("Core Operations: Code Generation, Atomic Single-Use Redemption & Concu
     expect(firstContacts.body.data.length).toBeGreaterThan(0);
     const privateContactId = firstContacts.body.data[0].id as string;
 
+    const secondRedeem = await request(app)
+      .post(`/api/v1/public/codes/${secondCode.token}/redeem`)
+      .send({ fullName: "Private Second Admin Contact", phoneNumber: "+1 555-9292" });
+    expect(secondRedeem.status).toBe(201);
+
     const secondContacts = await request(app)
       .get("/api/v1/admin/contacts")
       .set("Authorization", `Bearer ${secondAccessToken}`);
     expect(secondContacts.status).toBe(200);
-    expect(secondContacts.body.data).toHaveLength(0);
+    expect(secondContacts.body.data).toHaveLength(1);
+    expect(secondContacts.body.data[0].fullName).toBe("Private Second Admin Contact");
+    const secondPrivateContactId = secondContacts.body.data[0].id as string;
+
+    const firstContactsAfterSecondRedeem = await request(app)
+      .get("/api/v1/admin/contacts")
+      .set("Authorization", `Bearer ${adminToken}`);
+    expect(firstContactsAfterSecondRedeem.status).toBe(200);
+    expect(firstContactsAfterSecondRedeem.body.data.some((item: any) => item.id === secondPrivateContactId)).toBe(false);
 
     const forbiddenContact = await request(app)
       .get(`/api/v1/admin/contacts/${privateContactId}`)
       .set("Authorization", `Bearer ${secondAccessToken}`);
     expect(forbiddenContact.status).toBe(404);
+
+    const forbiddenSecondContact = await request(app)
+      .get(`/api/v1/admin/contacts/${secondPrivateContactId}`)
+      .set("Authorization", `Bearer ${adminToken}`);
+    expect(forbiddenSecondContact.status).toBe(404);
   });
 
 });
