@@ -169,6 +169,10 @@ The API integration suite covers bootstrap lockout, credential authentication, t
 
 Interactive Swagger UI: `/api/docs` on the API origin (or through the web proxy). OpenAPI 3.1 definition: [docs/openapi.yaml](docs/openapi.yaml). API endpoints are versioned under `/api/v1`.
 
+## Security model
+
+See [docs/SECURITY.md](docs/SECURITY.md) for access-code hashing, per-admin data isolation, JWT/refresh lifetimes, browser session protections, and remaining security decisions before public launch.
+
 ## Repository hygiene
 
 Commit source, tests, migrations, lockfile, documentation, and safe environment templates. Do not commit real `.env` files, one-time setup tokens, database dumps, or signing secrets.
