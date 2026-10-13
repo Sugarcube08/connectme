@@ -3,7 +3,11 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { parseEnv } from "node:util";
 import { defineConfig } from "vitest/config";
-import // Load the workspace and root env files before importing API/Prisma.
+import { isValidMySqlUrl } from "./src/config/mysql-url";
+
+// Load workspace and root env files before importing API/Prisma. Shell, CI, and
+// hosting-platform environment variables stay authoritative; empty template
+// placeholders fall back to a non-empty value from the root file.
 const environmentProvidedByProcess = new Set(Object.keys(process.env));
 
 function loadEnvFallback(fileName: string): void {
@@ -23,12 +27,9 @@ for (const candidate of [
 ]) {
   loadEnvFallback(candidate);
 }
-xistsSync(candidate)) loadEnvFile(candidate);
-  }
-}
 
-// API integration tests delete database rows. Prefer TEST_DATABASE_URL and never
-// silently run them against a non-test database.
+// API integration tests delete rows. Prefer TEST_DATABASE_URL and never silently
+// run destructive tests against a non-test database.
 const testDatabaseUrl = process.env.TEST_DATABASE_URL?.trim();
 if (testDatabaseUrl && !isValidMySqlUrl(testDatabaseUrl)) {
   throw new Error("TEST_DATABASE_URL must be a valid MySQL URL. Percent-encode reserved characters in URL components.");
@@ -40,9 +41,12 @@ if (testDatabaseUrl) {
   if (!configuredUrl) {
     throw new Error("Set TEST_DATABASE_URL to an isolated MySQL test database before running API tests.");
   }
+  if (!isValidMySqlUrl(configuredUrl)) {
+    throw new Error("DATABASE_URL must be a valid MySQL URL. Set TEST_DATABASE_URL to a MySQL database ending in _test.");
+  }
   let databaseName = "";
   try {
-    databaseName = new URL(configuredUrl).pathname.replace(/^\//, "");
+    databaseName = decodeURIComponent(new URL(configuredUrl).pathname.replace(/^\//, ""));
   } catch {
     throw new Error("DATABASE_URL is not a valid URL. Set TEST_DATABASE_URL to a valid isolated MySQL database.");
   }
