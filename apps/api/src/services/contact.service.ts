@@ -27,12 +27,11 @@ export class ContactService {
   }
 
   async update(id: string, adminUserId: string, input: UpdateContactInput): Promise<ContactItem> {
-    const existing = await this.contactRepo.findById(id, adminUserId);
-    if (!existing) throw new NotFoundError("Contact not found.");
-    const updated = await this.contactRepo.update(id, {
+    const updated = await this.contactRepo.update(id, adminUserId, {
       followUpStatus: input.followUpStatus as FollowUpStatus,
       discussionNotes: input.discussionNotes,
     });
+    if (!updated) throw new NotFoundError("Contact not found.");
     return serializeContact(updated);
   }
 
