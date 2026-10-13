@@ -17,6 +17,7 @@ beforeAll(async () => {
   await prisma.contactSubmission.deleteMany();
   await prisma.accessCode.deleteMany();
   await prisma.adminUser.deleteMany();
+  await prisma.appSetting.deleteMany({ where: { key: "public-origin" } });
 });
 
 describe("Automatic CORS Origin Resolution", () => {
@@ -93,6 +94,7 @@ describe("Controlled First-Admin Bootstrap Workflow", () => {
       candidateUsernames.map((candidate) =>
         request(app)
           .post("/api/v1/auth/bootstrap/setup")
+          .set("x-connectme-public-origin", "https://connectme.example.test")
           .send({
             token: bootstrapToken,
             username: candidate,
@@ -119,6 +121,8 @@ describe("Controlled First-Admin Bootstrap Workflow", () => {
     // Check bootstrap status is now closed
     const statusAfter = await request(app).get("/api/v1/auth/bootstrap/status");
     expect(statusAfter.body.data.isBootstrapPending).toBe(false);
+    const publicOriginSetting = await prisma.appSetting.findUnique({ where: { key: "public-origin" } });
+    expect((publicOriginSetting?.value as { origin?: string })?.origin).toBe("https://connectme.example.test");
 
     // Replay attack: attempting to reuse bootstrap token fails
     const replayRes = await request(app)
@@ -171,7 +175,6 @@ describe("Core Operations: Code Generation, Atomic Single-Use Redemption & Concu
     const genRes = await request(app)
       .post("/api/v1/admin/codes")
       .set("Authorization", `Bearer ${adminToken}`)
-      .set("x-connectme-public-origin", "https://connectme.example.test")
       .send({ label: "Devcon Booth Alpha" });
 
     expect(genRes.status).toBe(201);
