@@ -2,14 +2,15 @@ import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import path from "node:path";
 
-// Prisma's own .env discovery is workspace-local. Connect Me supports one root .env,
-// so load it explicitly and pass the resolved variables to the Prisma CLI process.
+// Prisma's own .env discovery is workspace-local. Prefer database-workspace and
+// API-local values, then fall back to the monorepo root .env for Compose/tooling.
 const loadEnvFile = (process as any).loadEnvFile as
   | ((fileName?: string) => void)
   | undefined;
 if (loadEnvFile) {
   for (const candidate of [
     path.resolve(process.cwd(), ".env"),
+    path.resolve(process.cwd(), "../../apps/api/.env"),
     path.resolve(process.cwd(), "../../.env"),
   ]) {
     if (existsSync(candidate)) loadEnvFile(candidate);
