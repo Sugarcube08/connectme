@@ -67,7 +67,7 @@ See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for combined and independent deploy
 
 - Express is the single authority for business rules and database access. Web and mobile never connect directly to MySQL.
 - Every public QR token is one-use; concurrent submissions may create only one contact record.
-- Initial administrator bootstrap is tokenized, short of no configured identity, atomic, and permanently locked after completion.
+- Initial administrator bootstrap is tokenized, has no configured identity, is atomic, and is permanently locked after completion.
 - Profile-image binary data lives in `submission_images`, separate from the listable contact rows.
 - Prisma schema changes are recorded as reviewed migrations in `packages/database/prisma/migrations`.
 - Use Conventional Commits and keep generated output, local secrets, test reports and database dumps out of Git.

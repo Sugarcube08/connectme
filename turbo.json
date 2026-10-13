@@ -1,5 +1,20 @@
 {
   "$schema": "https://turbo.build/schema.json",
+  "globalPassThroughEnv": [
+    "DATABASE_URL",
+    "TEST_DATABASE_URL",
+    "SESSION_SECRET",
+    "JWT_SECRET",
+    "CORS_ORIGIN",
+    "QR_CANONICAL_ORIGIN",
+    "API_INTERNAL_URL",
+    "NEXT_PUBLIC_APP_URL"
+  ],
+  "globalEnv": [
+    "NODE_ENV",
+    "NEXT_PUBLIC_API_BASE_URL",
+    "EXPO_PUBLIC_API_URL"
+  ],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
@@ -10,6 +25,7 @@
       "dependsOn": ["^build"]
     },
     "test": {
+      "cache": false,
       "dependsOn": ["^build"]
     },
     "dev": {

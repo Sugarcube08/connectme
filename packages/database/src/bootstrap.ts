@@ -35,7 +35,7 @@ export async function bootstrapAdmin(
   await loadEnvironment();
   // Load Prisma after env values are available. This also allows the CLI to load
   // the monorepo-root .env while tests can import the same function.
-  const { prisma } = await import("./index");
+  const { prisma } = await import("./index.js");
 
   const bootstrapToken = randomBytes(32).toString("base64url");
   const bootstrapTokenHash = createHash("sha256").update(bootstrapToken).digest("hex");
