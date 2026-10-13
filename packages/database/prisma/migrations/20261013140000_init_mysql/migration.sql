@@ -1,5 +1,5 @@
 -- Initial MySQL schema for Connect Me.
--- Generated baseline for a fresh MySQL 8+ database after changing the Prisma provider.
+-- Initial MySQL schema baseline corresponding to schema.prisma; apply only to a fresh MySQL database.
 -- Existing PostgreSQL databases are not compatible with this migration history.
 
 CREATE TABLE `admin_users` (
