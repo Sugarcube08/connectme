@@ -24,17 +24,17 @@ export class AuthService {
   constructor(private userRepo = new UserRepository()) {}
 
   async getBootstrapStatus(): Promise<BootstrapStatusDTO> {
-    const pending = await this.userRepo.findPendingBootstrap();
-    if (!pending) {
+    // Even a stale pending row must not make setup appear open once an admin exists.
+    if (await this.userRepo.findActiveAdmin()) {
       return { isBootstrapPending: false };
     }
 
-    const hasExpired =
-      !!pending.bootstrapExpiresAt && pending.bootstrapExpiresAt < new Date();
+    const pending = await this.userRepo.findPendingBootstrap();
+    if (!pending) return { isBootstrapPending: false };
 
+    const hasExpired = !pending.bootstrapExpiresAt || pending.bootstrapExpiresAt < new Date();
     return {
       isBootstrapPending: true,
-      username: pending.username,
       hasExpired,
     };
   }
@@ -42,52 +42,61 @@ export class AuthService {
   async setupBootstrap(
     input: BootstrapSetupInput
   ): Promise<{ user: AdminUserDTO; token: string; webSession: string }> {
-    const tokenHash = createHash("sha256").update(input.token.trim()).digest("hex");
-    const pendingUser = await this.userRepo.findByBootstrapTokenHash(tokenHash);
-
-    if (!pendingUser) {
-      throw new UnauthorizedError(
-        "Invalid or unrecognized one-time bootstrap token.",
-        "INVALID_BOOTSTRAP_TOKEN"
-      );
-    }
-
-    if (!pendingUser.isBootstrapPending) {
+    if (await this.userRepo.findActiveAdmin()) {
       throw new ForbiddenError(
-        "Administrator account has already been bootstrapped. Setup is permanently locked.",
+        "Administrator setup is already complete and cannot be reopened.",
         "BOOTSTRAP_ALREADY_COMPLETED"
       );
     }
 
-    if (
-      pendingUser.bootstrapExpiresAt &&
-      pendingUser.bootstrapExpiresAt < new Date()
-    ) {
+    const username = input.username.trim().toLowerCase();
+    if (!/^[a-z0-9][a-z0-9._-]{2,31}$/.test(username)) {
+      throw new ValidationError("Username must be 3–32 characters and use only letters, numbers, dots, underscores, or hyphens.");
+    }
+
+    const tokenHash = createHash("sha256").update(input.token.trim()).digest("hex");
+    const pendingUser = await this.userRepo.findByBootstrapTokenHash(tokenHash);
+    if (!pendingUser || !pendingUser.isBootstrapPending || pendingUser.isActive) {
+      throw new UnauthorizedError(
+        "Invalid, consumed, or unrecognized one-time bootstrap token.",
+        "INVALID_BOOTSTRAP_TOKEN"
+      );
+    }
+
+    if (!pendingUser.bootstrapExpiresAt || pendingUser.bootstrapExpiresAt < new Date()) {
       throw new GoneError(
-        "Bootstrap setup token has expired. Please run deployment provisioning again.",
+        "Bootstrap setup token has expired. An authorized operator must provision a new token.",
         "BOOTSTRAP_TOKEN_EXPIRED"
       );
     }
 
-    if (pendingUser.username !== input.username.toLowerCase().trim()) {
-      throw new ValidationError(
-        `Username mismatch. Configured administrator username is "${pendingUser.username}".`
-      );
+    const passwordHash = await bcrypt.hash(input.password, 12);
+    let activatedUser;
+    try {
+      activatedUser = await this.userRepo.completeBootstrap({
+        userId: pendingUser.id,
+        tokenHash,
+        username,
+        passwordHash,
+        displayName: input.displayName,
+      });
+    } catch (error) {
+      if (typeof error === "object" && error !== null && "code" in error && error.code === "P2002") {
+        throw new ValidationError("That username is unavailable. Choose another username.");
+      }
+      throw error;
     }
 
-    // Hash password securely with bcrypt
-    const passwordHash = await bcrypt.hash(input.password, 12);
-
-    const activatedUser = await this.userRepo.completeBootstrap({
-      userId: pendingUser.id,
-      passwordHash,
-      displayName: input.displayName,
-    });
+    if (!activatedUser) {
+      throw new ForbiddenError(
+        "This setup token has already been consumed or setup is no longer available.",
+        "BOOTSTRAP_ALREADY_COMPLETED"
+      );
+    }
 
     const userDTO = serializeAdminUser(activatedUser);
     const token = await this.createMobileToken(userDTO.id, userDTO.username);
     const webSession = await this.createWebSession(userDTO.id, userDTO.username);
-
     return { user: userDTO, token, webSession };
   }
 
@@ -108,7 +117,6 @@ export class AuthService {
     const userDTO = serializeAdminUser(user);
     const token = await this.createMobileToken(userDTO.id, userDTO.username);
     const webSession = await this.createWebSession(userDTO.id, userDTO.username);
-
     return { user: userDTO, token, webSession };
   }
 
@@ -131,10 +139,7 @@ export class AuthService {
   async verifyWebSession(token: string): Promise<{ userId: string; username: string } | null> {
     try {
       const { payload } = await jwtVerify(token, this.sessionSecret);
-      return {
-        userId: payload.userId as string,
-        username: payload.username as string,
-      };
+      return { userId: payload.userId as string, username: payload.username as string };
     } catch {
       return null;
     }
@@ -143,10 +148,7 @@ export class AuthService {
   async verifyMobileToken(token: string): Promise<{ userId: string; username: string } | null> {
     try {
       const { payload } = await jwtVerify(token, this.jwtSecret);
-      return {
-        userId: payload.userId as string,
-        username: payload.username as string,
-      };
+      return { userId: payload.userId as string, username: payload.username as string };
     } catch {
       return null;
     }
