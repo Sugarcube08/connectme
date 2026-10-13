@@ -14,23 +14,24 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     services:
-      postgres:
-        image: postgres:16-alpine
+      mysql:
+        image: mysql:16-alpine
         env:
-          POSTGRES_USER: connectme_test
-          POSTGRES_DB: connectme_test
-          POSTGRES_HOST_AUTH_METHOD: trust
+          MYSQL_USER: connectme_test
+          MYSQL_DATABASE: connectme_test
+          MYSQL_PASSWORD: connectme_test
+          MYSQL_ROOT_PASSWORD: root_test_only
         ports:
-          - 5432:5432
+          - 3306:3306
         options: >-
-          --health-cmd "pg_isready -U connectme_test -d connectme_test"
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -uroot -proot_test_only --silent"
           --health-interval 5s
           --health-timeout 3s
           --health-retries 10
     env:
       NODE_ENV: test
-      DATABASE_URL: postgresql://connectme_test@localhost:5432/connectme_test
-      TEST_DATABASE_URL: postgresql://connectme_test@localhost:5432/connectme_test
+      DATABASE_URL: mysql://connectme_test:connectme_test@localhost:3306/connectme_test
+      TEST_DATABASE_URL: mysql://connectme_test:connectme_test@localhost:3306/connectme_test
       CI: true
     steps:
       - name: Checkout
@@ -74,14 +75,12 @@ jobs:
       - name: Validate Docker Compose configuration
         shell: bash
         run: |
-          export POSTGRES_USER=connectme_test
-          export POSTGRES_PASSWORD="$(openssl rand -hex 24)"
-          export POSTGRES_DB=connectme_test
+          export MYSQL_USER=connectme_test
+          export MYSQL_PASSWORD="$(openssl rand -hex 24)"
+          export MYSQL_DATABASE=connectme_test
           export SESSION_SECRET="$(openssl rand -hex 32)"
           export JWT_SECRET="$(openssl rand -hex 32)"
-          export CORS_ORIGIN=https://connectme.example.test
-          export QR_CANONICAL_ORIGIN=https://connectme.example.test
-          export NEXT_PUBLIC_APP_URL=https://connectme.example.test
+                    export NEXT_PUBLIC_APP_URL=https://connectme.example.test
           docker compose config --quiet
 
       - name: Build API container target
