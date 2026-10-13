@@ -14,7 +14,7 @@ Set the API project's production environment variables in Vercel:
 |---|---:|---|
 | `DATABASE_URL` | Yes | Provider-issued MySQL URL, `mysql://user:password@host:3306/database`; use the provider's recommended pooled URL for serverless runtime when available. |
 | `SESSION_SECRET` | Yes | Unique random secret, at least 32 characters. |
-| `JWT_SECRET` | Yes | A different unique random secret, at least 32 characters. |
+| `JWT_SECRET` | Yes | A different unique secret, at least 32 characters. |
 | `NODE_ENV` | Recommended | `production`. |
 | `MAX_IMAGE_SIZE_BYTES` | Optional | Defaults to `2097152` (2 MiB). |
 | `MAX_BATCH_CODE_COUNT` | Optional | Defaults to `100`. |
@@ -84,6 +84,15 @@ After deployment, replace the hostname below with the API's actual Vercel domain
 - `/api/docs` — Swagger UI, if the OpenAPI definition is included in the deployed bundle.
 
 If liveness succeeds but readiness returns `503`, verify the MySQL URL, provider network/access settings, and applied migration status.
+
+### Troubleshooting: runtime still requires legacy origin variables
+
+If a Vercel runtime log says `Missing required production environment values: CORS_ORIGIN, QR_CANONICAL_ORIGIN`, that function is running an older API bundle. The current `apps/api/src/config/env.ts` does not declare or require either variable. **Do not restore the obsolete variables to mask the error.**
+
+1. Open the failing deployment in Vercel and check its source commit. It must include the current `main` code where those variables were removed.
+2. Verify the API project's Git repository is `Sugarcube08/connectme`, its production branch is `main`, and its Root Directory/build configuration follows this guide.
+3. Redeploy the latest `main` commit with **Use existing Build Cache** disabled if the source commit is correct but the runtime still contains the old validation code.
+4. Recheck `/health/live` and `/health/ready` on the new deployment.
 
 ## 6. Connect the web project later
 
