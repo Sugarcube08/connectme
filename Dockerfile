@@ -9,8 +9,6 @@ RUN corepack enable && corepack prepare pnpm@12.11.2 --activate
 # Keep the whole workspace in the build context because shared packages are linked
 # with workspace:* and both server applications import generated Prisma/client code.
 COPY . .
-ARG NEXT_PUBLIC_API_BASE_URL=""
-ENV NEXT_PUBLIC_API_BASE_URL=$NEXT_PUBLIC_API_BASE_URL
 RUN pnpm install --frozen-lockfile
 
 # Prisma generation validates the datasource URL but does not connect to a database.
