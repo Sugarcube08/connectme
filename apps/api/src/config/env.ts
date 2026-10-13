@@ -1,11 +1,8 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
+import { parseEnv } from "node:util";
 import { z } from "zod";
 import { isValidMySqlUrl } from "./mysql-url";
-
-import { existsSync, readFileSync } from "node:fs";
-import { parseEnv } from "node:util";
-import path from "node:path";
 
 // Respect process/Vercel/CI variables first. For files, a non-empty workspace-local
 // value wins; an empty template placeholder falls back to the root .env.
