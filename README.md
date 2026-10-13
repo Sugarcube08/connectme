@@ -1,174 +1,154 @@
-# CONNECT ME
+# Connect Me
 
-> *"You share. We connect."*
+> **You share. We connect.**
 
-Connect Me is a lightweight, single-use QR-code contact collection and professional networking platform designed for high-density tech conferences like **Devcon**.
+Connect Me is a lightweight, single-use QR contact-capture system for in-person networking at technical conferences. Each printed card contains an unpredictable, one-time URL. A visitor submits their contact details; the owner reviews the contact privately in the web dashboard or mobile app.
 
-Physical business cards printed with unique, cryptographically unpredictable QR codes are handed to attendees. When scanned, attendees submit their contact details through a lightweight mobile browser interface. The owner reviews all submissions, takes notes, and initiates follow-ups via the web dashboard or native mobile app.
+## Privacy and product rules
 
----
+- Public pages never disclose the owner's phone, email, vCard, social links, or personal identity.
+- No reciprocal contact exchange, public attendee directory, attendee login, OTP, SMS, or AI service is required.
+- Each access token can be redeemed once. Redemption is atomic in PostgreSQL, including under concurrent requests.
+- Optional profile images are normalized and stored in a separate PostgreSQL `BYTEA` table.
+- The owner chooses their own administrator username and password during first-time setup. There are no preset admin credentials.
 
-## 🛡️ Critical Product Rule: Zero Owner Exposure
+## Architecture
 
-**Connect Me collects other people's contact information so that the owner can reach out to them.**
-
-- The platform **never** displays the owner's phone number, email address, vCard, social links, or personal identity on any public screen.
-- There is no reciprocal contact exchange.
-- There is no public attendee directory or discovery mechanism.
-- Attendees are never asked to install an app or register an account.
-
----
-
-## 🏛️ Architecture Overview
-
-The codebase is structured as a TypeScript monorepo orchestrated with **pnpm workspaces** and **Turborepo**:
-
-```
-connect-me/
-├── apps/
-│   ├── api/             # Express.js MVC REST API (Authoritative backend)
-│   ├── web/             # Next.js 15 App Router (Public forms & Admin dashboard)
-│   └── mobile/          # React Native + Expo (On-the-go admin app)
-├── packages/
-│   ├── contracts/       # Shared DTOs, API envelopes, and status enums
-│   ├── validation/      # Shared Zod schemas for runtime payload safety
-│   ├── database/        # PostgreSQL schema, Prisma migrations & bootstrap CLI
-│   ├── api-client/      # Strongly-typed fetch API client for Web & Mobile
-│   └── design-tokens/   # Devcon Obsidian Royal design palette & tokens
-└── docs/
-    ├── openapi.yaml     # OpenAPI 3.1 specification
-    └── decisions/       # Architecture Decision Records (ADR-001 through ADR-010)
+```text
+apps/
+  api/       Express MVC API — authoritative business logic and data access
+  web/       Next.js — mobile-first public form and administrator dashboard
+  mobile/    React Native + Expo — mobile administrator client
+packages/
+  database/  PostgreSQL + Prisma schema and managed migrations
+  api-client/ Shared typed API client
+  contracts/ Shared DTOs and API response types
+  validation/Shared Zod validation schemas
+  design-tokens/ Obsidian, royal violet, ivory and restrained gold palette
+docs/
+  openapi.yaml
+  decisions/ Architecture Decision Records
 ```
 
-### Key Architectural Decisions
-1. **MVC Express API (`apps/api`)**: The single source of truth for business logic and data persistence.
-2. **PostgreSQL & Prisma (`packages/database`)**: Schema versioning managed via declarative Prisma migrations (`packages/database/prisma/migrations`).
-3. **Decoupled Binary Storage**: Optional profile photos are stored in a dedicated `submission_images` table (`BYTEA`) so that list queries for attendee dossiers remain fast and lightweight.
-4. **Atomic Single-Use Invalidation**: Token redemptions run inside an isolated PostgreSQL transaction using conditional row updates (`status = 'ACTIVE' -> 'CONSUMED'`), ensuring strictly at most one redemption succeeds even under heavy concurrent replay attempts.
-5. **Zero Hardcoded Secrets**: First-admin account creation uses a cryptographically unpredictable bootstrap token generated at deployment time (`pnpm db:bootstrap`).
+The API remains a separate process even when web and API are presented under one public origin. This allows either service to be built and deployed independently.
 
----
+## Deployment modes
 
-## 🎨 Visual Identity
+| Mode | How it works |
+|---|---|
+| Local development | Express on `localhost:4000`, Next.js on `localhost:3000`, PostgreSQL on `localhost:5432`. |
+| Combined public origin | Next.js serves the website and proxies `/api/v1/*`, `/health/*`, and `/api/docs/*` to Express using server-only `API_INTERNAL_URL`. |
+| Independent services | Deploy API and web as separate services. Configure `API_INTERNAL_URL` on the web service. Optionally set `NEXT_PUBLIC_API_BASE_URL` at web build time to have browsers call a separately exposed API origin directly. |
 
-Connect Me departs from standard green-tinted office dashboards and adopts a dark, royal Devcon-inspired aesthetic:
-- **Obsidian Dark** (`#0B0B10` / `#13121C`)
-- **Royal Velvet** (`#6D3CE8` / `#7E4DF5`)
-- **Warm Ivory** (`#F3EFE7`)
-- **Metallic Gold** (`#C8A96B`)
-- **Slate Violet** (`#A5A4B2` / `#777681`)
+The runtime proxy preserves request bodies, cookies and binary responses. It supports CSV exports and contact images without loading image bytes into the web app.
 
----
+## Quick start
 
-## 🚀 Quick Start Guide
+### 1. Configure environment variables
 
-### Prerequisites
-- **Node.js** v20.x or v22.x+
-- **pnpm** v9+ or v12+
-- **Docker** (or local PostgreSQL instance on port `5432`)
-
-### 1. Database Setup
-Start the local PostgreSQL container:
 ```bash
-docker run --name connectme-postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=connectme -p 5432:5432 -d postgres:16-alpine
+cp .env.example .env
 ```
 
-### 2. Install Dependencies & Build
+Edit `.env`. Choose a PostgreSQL role name and password; use URL-safe random hex for the password. Generate **different** signing secrets for sessions and mobile JWTs:
+
 ```bash
+openssl rand -hex 24  # paste output into POSTGRES_PASSWORD
+openssl rand -hex 32  # paste output into SESSION_SECRET
+openssl rand -hex 32  # run again; paste output into JWT_SECRET
+openssl rand -hex 24  # optionally use as a test DB password if needed
+```
+
+Set `DATABASE_URL` to a literal local PostgreSQL URL using your chosen role/password and the database `connectme`. Set `TEST_DATABASE_URL` to a separate database whose name ends in `_test` (for example, `connectme_test`). Do not leave required values blank. Never commit `.env`.
+
+### 2. Start PostgreSQL and install dependencies
+
+```bash
+docker compose up -d postgres
 pnpm install
+pnpm db:generate
+pnpm db:migrate
+```
+
+Create the separate test database once (replace the role name with the one you configured):
+
+```bash
+docker compose exec postgres sh -lc 'createdb -U "$POSTGRES_USER" connectme_test'
+DATABASE_URL='<your-connectme-test-database-url>' pnpm db:migrate
+```
+
+The second command applies the same Prisma migrations to the isolated test database. Integration tests delete rows and will refuse to run against a database that does not end in `_test` or `_testing`.
+
+### 3. Provision the first administrator
+
+```bash
+pnpm db:bootstrap
+```
+
+The command prints a cryptographically random, one-time setup token in the terminal. It does **not** configure a username or password and does not put the token in the setup URL. Open the printed `/setup` URL, enter the token manually, and choose your username, display name and password.
+
+The setup token expires. If it is lost or deliberately needs replacement before setup is complete, use the explicit operator action:
+
+```bash
+pnpm db:bootstrap:rotate
+```
+
+This invalidates the previous pending token. It refuses to reopen setup after an administrator has been created.
+
+### 4. Run web and API
+
+```bash
+pnpm dev:api:web
+```
+
+Or run individually:
+
+```bash
+pnpm dev:api
+pnpm dev:web
+pnpm dev:mobile
+```
+
+Default URLs: web `http://localhost:3000`, setup `http://localhost:3000/setup`, API docs `http://localhost:4000/api/docs`, API readiness `http://localhost:4000/health/ready`.
+
+For a physical phone, set `EXPO_PUBLIC_API_URL` to an API address reachable from that phone; `localhost` refers to the phone itself.
+
+## Combined Docker deployment
+
+Fill in the required `.env` values and replace local origins with the real public HTTPS origin before production deployment.
+
+```bash
+# Apply schema migrations before starting the application.
+docker compose --profile tools run --rm migrate
+
+# Provision the one-time admin token; enter it manually on /setup.
+docker compose --profile tools run --rm bootstrap
+
+# Launch API + web behind one public web origin.
+docker compose --profile app up --build -d
+```
+
+By default Compose binds published ports to loopback, so a host reverse proxy can expose HTTPS without directly exposing the containers. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for deployment layouts, exact environment roles, operational commands and security considerations.
+
+## Tests and checks
+
+```bash
+pnpm test
+pnpm typecheck
+pnpm lint
 pnpm build
 ```
 
-### 3. Run Migrations & Bootstrap Initial Administrator
-```bash
-# Run managed Prisma migration
-pnpm db:migrate
+The API integration suite covers bootstrap lockout, credential authentication, token eligibility, image submission, CRM operations, and concurrent single-use redemption. Set `TEST_DATABASE_URL` before running tests.
 
-# Provision the initial administrator account
-pnpm db:bootstrap
-```
-The bootstrap command will print a one-time bootstrap setup token:
-```text
-============================================================
-CONNECT ME FIRST-ADMIN BOOTSTRAP PROVISIONED
-============================================================
-Admin Username   : harsh
-Bootstrap Token  : <ONE_TIME_BOOTSTRAP_TOKEN>
-Setup URL        : http://localhost:3001/setup?token=<TOKEN>
-============================================================
-```
+## API reference
 
-### 4. Start Development Servers
-```bash
-# Start Express API (Port 4000)
-pnpm dev:api
+Interactive Swagger UI: `/api/docs` on the API origin (or through the web proxy). OpenAPI 3.1 definition: [docs/openapi.yaml](docs/openapi.yaml). API endpoints are versioned under `/api/v1`.
 
-# Start Next.js Web App (Port 3001)
-pnpm dev:web
+## Repository hygiene
 
-# Or run both simultaneously
-pnpm dev
-```
+Commit source, tests, migrations, lockfile, documentation, and safe environment templates. Do not commit real `.env` files, one-time setup tokens, database dumps, or signing secrets.
 
-### 5. Access Interfaces
-- **First-Time Admin Setup**: `http://localhost:3001/setup`
-- **Admin Web Dashboard**: `http://localhost:3001/admin`
-- **Interactive Swagger Docs**: `http://localhost:4000/api/docs`
-- **API Health Check**: `http://localhost:4000/health/ready`
+## License
 
----
-
-## 📱 Mobile Admin App (Expo)
-
-To start the Expo mobile client:
-```bash
-pnpm dev:mobile
-```
-- For **Web preview**, press `w` in the terminal.
-- For **Android emulator**, press `a`.
-- For **iOS simulator**, press `i`.
-
----
-
-## 🧪 Testing & Verification
-
-Run the test suite:
-```bash
-pnpm test
-```
-The automated test suite verifies:
-- Liveness and database readiness endpoints.
-- Bootstrap setup workflow and permanent route locking.
-- Password authentication and JWT token issuance.
-- Cryptographic token generation and public eligibility verification.
-- **Single-use redemption under 8 simultaneous concurrent requests** (strictly 1 success, 7 conflicts).
-- Attendee contact management, image retrieval, and follow-up status lifecycle.
-
----
-
-## 📖 API Documentation
-
-Interactive Swagger documentation is available at `http://localhost:4000/api/docs` and based on the OpenAPI 3.1 specification at [docs/openapi.yaml](file:///home/sugarcube/Documents/Documents/Code-Server/Projects/connectme/docs/openapi.yaml).
-
-| Method | Endpoint | Description | Auth |
-|---|---|---|---|
-| `GET` | `/health/live` | Container liveness check | Public |
-| `GET` | `/health/ready` | Database readiness check | Public |
-| `GET` | `/api/v1/public/codes/:token` | Check QR code eligibility | Public |
-| `POST` | `/api/v1/public/codes/:token/redeem` | Submit attendee contact info | Public |
-| `POST` | `/api/v1/auth/bootstrap/setup` | First-time admin password setup | Bootstrap Token |
-| `POST` | `/api/v1/auth/login` | Administrator login | Public |
-| `POST` | `/api/v1/auth/logout` | Administrator logout | Session / Bearer |
-| `GET` | `/api/v1/admin/dashboard` | Key metrics and recent submissions | Admin |
-| `POST` | `/api/v1/admin/codes` | Generate single or batch QR codes | Admin |
-| `POST` | `/api/v1/admin/codes/:id/revoke` | Revoke active access code | Admin |
-| `GET` | `/api/v1/admin/contacts` | List and filter attendee contacts | Admin |
-| `GET` | `/api/v1/admin/contacts/:id/image` | Retrieve attendee profile photo | Admin |
-| `PATCH` | `/api/v1/admin/contacts/:id` | Update follow-up status or notes | Admin |
-| `GET` | `/api/v1/admin/settings` | Get public branding & event settings | Admin |
-| `PATCH` | `/api/v1/admin/settings` | Update event name & privacy notice | Admin |
-
----
-
-## 📜 License
-Private & Confidential — Built for Devcon 2026.
+Private & Confidential — built for Devcon 2026.
