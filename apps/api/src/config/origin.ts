@@ -28,12 +28,6 @@ export function normalizeOrigin(value: string | undefined | null): string | null
   }
 }
 
-/**
- * CORS is derived from the request host and Vercel's system URLs instead of an
- * operator-maintained CORS_ORIGIN value. The web frontend should use the
- * same-origin Next.js proxy; that proxy strips browser Origin before calling API.
- * Native clients normally do not send Origin and therefore need no CORS grant.
- */
 function originFromDeploymentHost(host: string | undefined): string | null {
   if (!host?.trim()) return null;
   const value = host.includes("://") ? host : `https://${host}`;
@@ -52,6 +46,12 @@ function deploymentOrigins(): Set<string> {
   );
 }
 
+/**
+ * CORS is derived from the request host and Vercel's system URLs instead of an
+ * operator-maintained CORS_ORIGIN value. The web frontend should use the
+ * same-origin Next.js proxy; that proxy strips browser Origin before calling API.
+ * Native clients normally do not send Origin and therefore need no CORS grant.
+ */
 export function isAllowedCorsOrigin(origin: string, request: Request): boolean {
   const normalized = normalizeOrigin(origin);
   if (!normalized || normalized !== origin) return false;
