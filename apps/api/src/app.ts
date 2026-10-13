@@ -6,7 +6,6 @@ import path from "node:path";
 import fs from "node:fs";
 import YAML from "yamljs";
 import swaggerUi from "swagger-ui-express";
-import { config } from "./config/env";
 import { isAllowedCorsOrigin } from "./config/origin";
 import { healthRoutes } from "./routes/health.routes";
 import { publicRoutes } from "./routes/public.routes";
