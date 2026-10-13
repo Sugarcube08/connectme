@@ -71,12 +71,16 @@ docker compose up -d mysql
 pnpm install
 pnpm db:generate
 pnpm db:migrate
-```bash
-docker compose exec mysql sh -lc 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -e "CREATE DATABASE IF NOT EXISTS connectme_test;"'
-DATABASE_URL='mysql://root:<root-password>@localhost:3306/connectme_test' pnpm db:migrate
 ```
 
-The second command applies migrations to the isolated test database. Set `TEST_DATABASE_URL` to the same test URL before running the destructive suite. Using the local MySQL root account here avoids granting the runtime application user extra database-management privileges; never use root as the production API's `DATABASE_URL`. Integration tests delete rows and will refuse to run against a database that does not end in `_test` or `_testing`.
+Create the isolated test database once, using the local MySQL root credentials configured in `.env`:
+
+```bash
+docker compose exec mysql sh -lc 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -e "CREATE DATABASE IF NOT EXISTS connectme_test;"'
+TEST_DATABASE_URL='mysql://root:<root-password>@localhost:3306/connectme_test' pnpm db:migrate
+```
+
+Set `TEST_DATABASE_URL` to that same test database URL before running `pnpm test`. Integration tests delete rows and refuse to run against a database that does not end in `_test` or `_testing`. The test database must be migrated separately from the development database.
 
 ### 3. Provision the first administrator
 
