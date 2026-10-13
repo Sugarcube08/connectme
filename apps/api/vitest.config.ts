@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { defineConfig } from "vitest/config";
 
-// Load the developer's configured monorepo .env before tests import the API/Prisma.
+// Load the developer's monorepo .env before tests import the API/Prisma.
 const loadEnvFile = (process as any).loadEnvFile as
   | ((fileName?: string) => void)
   | undefined;
@@ -16,7 +16,28 @@ if (loadEnvFile) {
   }
 }
 
-// Ephemeral test-only signing keys. Production config has no secret fallbacks.
+// API integration tests delete database rows. Prefer TEST_DATABASE_URL and never
+// silently run them against a non-test database.
+const testDatabaseUrl = process.env.TEST_DATABASE_URL?.trim();
+if (testDatabaseUrl) {
+  process.env.DATABASE_URL = testDatabaseUrl;
+} else {
+  const configuredUrl = process.env.DATABASE_URL?.trim();
+  if (!configuredUrl) {
+    throw new Error("Set TEST_DATABASE_URL to an isolated PostgreSQL test database before running API tests.");
+  }
+  let databaseName = "";
+  try {
+    databaseName = new URL(configuredUrl).pathname.replace(/^\//, "");
+  } catch {
+    throw new Error("DATABASE_URL is not a valid URL. Set TEST_DATABASE_URL to a valid isolated PostgreSQL database.");
+  }
+  if (!/(?:_test|_testing)$/i.test(databaseName)) {
+    throw new Error("Refusing to run destructive API tests against a non-test database. Set TEST_DATABASE_URL to a database ending in _test.");
+  }
+  process.env.DATABASE_URL = configuredUrl;
+}
+
 process.env.NODE_ENV = "test";
 process.env.SESSION_SECRET ??= randomBytes(32).toString("hex");
 process.env.JWT_SECRET ??= randomBytes(32).toString("hex");
