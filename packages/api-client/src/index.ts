@@ -20,17 +20,21 @@ export interface ApiClientConfig {
   baseUrl: string;
   getToken?: () => string | null | Promise<string | null>;
   onUnauthorized?: () => void;
+  /** Public visitor-facing web origin. Set by native clients only when they create QR codes directly. */
+  publicOrigin?: string;
 }
 
 export class ConnectMeApiClient {
   private baseUrl: string;
   private getToken?: () => string | null | Promise<string | null>;
   private onUnauthorized?: () => void;
+  private publicOrigin?: string;
 
   constructor(config: ApiClientConfig) {
     this.baseUrl = config.baseUrl.replace(/\/+$/, "");
     this.getToken = config.getToken;
     this.onUnauthorized = config.onUnauthorized;
+    this.publicOrigin = config.publicOrigin?.replace(/\/+$/, "");
   }
 
   private async request<T>(
@@ -169,7 +173,10 @@ export class ConnectMeApiClient {
   }): Promise<ApiResponse<{ count: number; codes: GeneratedCodeDetail[] } | GeneratedCodeDetail>> {
     return this.request("/admin/codes", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(this.publicOrigin ? { "X-ConnectMe-Public-Origin": this.publicOrigin } : {}),
+      },
       body: JSON.stringify(params),
     });
   }
