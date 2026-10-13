@@ -31,7 +31,6 @@ Use a URL-safe password such as random hex for MySQL. `DATABASE_URL` must be a l
 | `NEXT_PUBLIC_APP_URL` | Optional for bootstrap | Bootstrap CLI | Public web origin; setup links end in `/setup` and do not include the setup token. Set it when running bootstrap outside Vercel if the default local URL is not correct. |
 | `API_INTERNAL_URL` | Yes when web is separate from API | Next.js server | Server-only URL of Express. It is never placed in browser code. The proxy sends its public origin to the API for QR generation. |
 | `COMPOSE_API_INTERNAL_URL` | Required for web-only Compose deployments | Docker Compose / web container | Optional override passed to the web container as `API_INTERNAL_URL`; leave blank for combined mode, where the private Compose service URL is used. |
-| `NEXT_PUBLIC_API_BASE_URL` | Optional | Web browser bundle | Leave blank for the recommended same-origin proxy. Direct cross-origin browser calls are not enabled by the automatic CORS policy. This is a build-time public value, not a secret. |
 | `EXPO_PUBLIC_API_URL` | For device/mobile release | Expo app | Public API origin reachable from the mobile device. |
 
 Do not copy the blank values unchanged into a running environment. Never commit `.env`, database dumps, signing secrets, or a generated bootstrap token. `CORS_ORIGIN` and `QR_CANONICAL_ORIGIN` are no longer used and should be removed from existing deployment environment settings.
@@ -100,9 +99,9 @@ Supply the API function with production values for `NODE_ENV`, `DATABASE_URL`, `
 
 ### Web service
 
-Supply the web container with `API_INTERNAL_URL` pointing to the deployed API origin or private service address and `NEXT_PUBLIC_APP_URL` pointing to the public website origin. When the browser should use the same-origin proxy, leave `NEXT_PUBLIC_API_BASE_URL` empty. In this arrangement API and web are separately deployed but the browser still talks only to the web origin. QR links use the origin provided by the web proxy; if an authenticated mobile client creates codes directly with no web-origin context, the API falls back to Vercel's stable production domain/request host.
+Supply the web container with `API_INTERNAL_URL` pointing to the deployed API origin or private service address and `NEXT_PUBLIC_APP_URL` pointing to the public website origin. The browser always uses the same-origin proxy. In this arrangement API and web are separately deployed but the browser still talks only to the web origin. QR links use the origin provided by the web proxy; if an authenticated mobile client creates codes directly with no web-origin context, the API falls back to Vercel's stable production domain/request host.
 
-To have browser JavaScript call the API's public origin directly, set `NEXT_PUBLIC_API_BASE_URL=https://api.example.com` as a **web build argument** and rebuild the web target. The API derives same-origin CORS permissions from the request host and Vercel system domains. The recommended web proxy strips browser Origin metadata and provides a validated public-origin hint for QR links. Direct cross-origin browser-to-API calls are intentionally not automatically trusted; keep `NEXT_PUBLIC_API_BASE_URL` empty.
+Browser JavaScript is intentionally not configured for direct cross-origin API requests. It calls the same-origin Next.js proxy, which strips browser Origin metadata before forwarding to Express and supplies the public origin for QR generation. This allows the API and web to live in different Vercel projects without maintaining a fixed CORS allow-list.
 
 Mobile clients call the API directly and should receive `EXPO_PUBLIC_API_URL` at Expo build time. Never put database URLs, signing keys, or other secrets in `NEXT_PUBLIC_*` / `EXPO_PUBLIC_*` values.
 
