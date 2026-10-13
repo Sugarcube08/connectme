@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, Suspense } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { apiClient } from "@/lib/api";
 import {
@@ -17,16 +17,11 @@ import {
 
 function SetupContent() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const tokenParam = searchParams.get("token") || "";
-
   const [loading, setLoading] = useState(true);
   const [bootstrapPending, setBootstrapPending] = useState<boolean | null>(null);
-  const [configuredUsername, setConfiguredUsername] = useState("harsh");
-
   // Form Fields
-  const [token, setToken] = useState(tokenParam);
-  const [username, setUsername] = useState("harsh");
+  const [token, setToken] = useState("");
+  const [username, setUsername] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -41,10 +36,6 @@ function SetupContent() {
         const res = await apiClient.getBootstrapStatus();
         if (res.success && res.data) {
           setBootstrapPending(res.data.isBootstrapPending);
-          if (res.data.username) {
-            setConfiguredUsername(res.data.username);
-            setUsername(res.data.username);
-          }
         }
       } catch {
         setError("Could not communicate with the API server.");
@@ -53,11 +44,8 @@ function SetupContent() {
       }
     }
 
-    if (tokenParam) {
-      setToken(tokenParam);
-    }
     checkStatus();
-  }, [tokenParam]);
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -65,6 +53,11 @@ function SetupContent() {
 
     if (!token.trim()) {
       setError("Please provide the one-time setup token delivered during provisioning.");
+      return;
+    }
+
+    if (!/^[a-z0-9][a-z0-9._-]{2,31}$/i.test(username.trim())) {
+      setError("Username must be 3–32 characters and use only letters, numbers, dots, underscores, or hyphens.");
       return;
     }
 
@@ -169,7 +162,7 @@ function SetupContent() {
                 required
                 value={token}
                 onChange={(e) => setToken(e.target.value)}
-                placeholder="22-char token from provisioning log"
+                placeholder="Paste the one-time token from the terminal"
                 className="w-full rounded-xl border border-obsidian-border bg-obsidian-elevated py-2.5 pl-10 pr-4 font-mono text-xs text-warmIvory placeholder-slate focus:border-royalViolet focus:outline-none"
               />
             </div>
@@ -190,7 +183,7 @@ function SetupContent() {
                 required
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                placeholder={configuredUsername}
+                placeholder="Choose a username"
                 className="w-full rounded-xl border border-obsidian-border bg-obsidian-elevated py-2.5 pl-10 pr-4 text-xs text-warmIvory placeholder-slate focus:border-royalViolet focus:outline-none"
               />
             </div>
@@ -205,7 +198,7 @@ function SetupContent() {
               type="text"
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
-              placeholder="e.g. Harsh"
+              placeholder="Your display name"
               className="w-full rounded-xl border border-obsidian-border bg-obsidian-elevated px-4 py-2.5 text-xs text-warmIvory placeholder-slate focus:border-royalViolet focus:outline-none"
             />
           </div>
@@ -264,7 +257,7 @@ function SetupContent() {
 
         <div className="mt-8 flex items-center justify-center gap-1.5 text-xs text-slate">
           <ShieldCheck className="h-3.5 w-3.5 text-metallicGold" />
-          <span>No hardcoded credentials &bull; One-time bootstrap</span>
+          <span>No preset account &bull; One-time bootstrap token</span>
         </div>
       </div>
     </div>
@@ -272,9 +265,5 @@ function SetupContent() {
 }
 
 export default function SetupPage() {
-  return (
-    <Suspense fallback={<div className="min-h-screen bg-obsidian" />}>
-      <SetupContent />
-    </Suspense>
-  );
+  return <SetupContent />;
 }
