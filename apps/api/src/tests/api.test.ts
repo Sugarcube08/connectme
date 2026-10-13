@@ -19,6 +19,29 @@ beforeAll(async () => {
   await prisma.adminUser.deleteMany();
 });
 
+describe("Automatic CORS Origin Resolution", () => {
+  it("allows the request's own HTTPS origin without a configured CORS_ORIGIN", async () => {
+    const res = await request(app)
+      .get("/health/live")
+      .set("Host", "connectme-api.example.test")
+      .set("Origin", "https://connectme-api.example.test");
+
+    expect(res.status).toBe(200);
+    expect(res.headers["access-control-allow-origin"]).toBe("https://connectme-api.example.test");
+    expect(res.headers["access-control-allow-credentials"]).toBe("true");
+  });
+
+  it("rejects an arbitrary third-party browser origin instead of reflecting it", async () => {
+    const res = await request(app)
+      .get("/health/live")
+      .set("Host", "connectme-api.example.test")
+      .set("Origin", "https://untrusted.example.test");
+
+    expect(res.status).toBe(403);
+    expect(res.body.error.code).toBe("CORS_ORIGIN_DENIED");
+  });
+});
+
 describe("Express API MVC - Health Endpoints", () => {
   it("GET /health/live returns 200 OK", async () => {
     const res = await request(app).get("/health/live");
