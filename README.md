@@ -49,9 +49,19 @@ The runtime proxy preserves request bodies, cookies and binary responses. It sup
 
 ### 1. Configure environment variables
 
+The repository has a root template for Docker Compose/workspace tooling and app-local templates for independent app development:
+
 ```bash
 cp .env.example .env
+cp apps/api/.env.example apps/api/.env
+cp apps/web/.env.example apps/web/.env
 ```
+
+- Root `.env`: Docker Compose variables and monorepo-level database/tool commands.
+- `apps/api/.env`: API runtime, MySQL connection URL, test database URL, and signing keys.
+- `apps/web/.env`: server-only `API_INTERNAL_URL`; the web app does not need database credentials or signing secrets.
+
+Existing process/Vercel environment variables take precedence over file values. Database tooling checks its workspace `.env`, then `apps/api/.env`, then the root `.env`. Keep local `.env` files out of Git.
 
 Edit `.env`. Choose a MySQL application user/password and a distinct root password; use URL-safe random hex for the passwords. Generate **different** signing secrets for sessions and mobile JWTs:
 
@@ -62,7 +72,7 @@ openssl rand -hex 32  # run again; paste output into JWT_SECRET
 openssl rand -hex 24  # paste output into MYSQL_PASSWORD
 ```
 
-Set `DATABASE_URL` to a literal local MySQL URL using your chosen application user/password, such as `mysql://<user>:<password>@localhost:3306/connectme`. Set `TEST_DATABASE_URL` to a separate MySQL database whose name ends in `_test` (for example, `mysql://<user>:<password>@localhost:3306/connectme_test`). Do not leave required values blank. Never commit `.env`.
+Set `DATABASE_URL` to a complete MySQL URI, for example `mysql://connectme_user:URL_ENCODED_PASSWORD@localhost:3306/connectme`. Set `TEST_DATABASE_URL` to a separate MySQL database whose name ends in `_test`, for example `mysql://connectme_user:URL_ENCODED_PASSWORD@localhost:3306/connectme_test`. Percent-encode reserved characters in URI components. See `apps/api/.env.example` for format details. Do not leave required values blank. Never commit `.env`.
 
 ### 2. Start MySQL and install dependencies
 
