@@ -71,17 +71,12 @@ docker compose up -d mysql
 pnpm install
 pnpm db:generate
 pnpm db:migrate
-```
-
-Create the separate test database once (replace the role name with the one you configured):
-
 ```bash
 docker compose exec mysql sh -lc 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -e "CREATE DATABASE IF NOT EXISTS connectme_test;"'
-docker compose exec mysql sh -lc 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -e "GRANT ALL PRIVILEGES ON connectme_test.* TO '\''${MYSQL_USER}'\''@'\''%'\'';"'
-DATABASE_URL='mysql://<user>:<password>@localhost:3306/connectme_test' pnpm db:migrate
+DATABASE_URL='mysql://root:<root-password>@localhost:3306/connectme_test' pnpm db:migrate
 ```
 
-The second command applies the Prisma migrations to the isolated test database. Set `TEST_DATABASE_URL` to this test database URL before running the destructive integration suite. Integration tests delete rows and will refuse to run against a database that does not end in `_test` or `_testing`.
+The second command applies migrations to the isolated test database. Set `TEST_DATABASE_URL` to the same test URL before running the destructive suite. Using the local MySQL root account here avoids granting the runtime application user extra database-management privileges; never use root as the production API's `DATABASE_URL`. Integration tests delete rows and will refuse to run against a database that does not end in `_test` or `_testing`.
 
 ### 3. Provision the first administrator
 
