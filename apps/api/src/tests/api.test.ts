@@ -389,6 +389,25 @@ describe("Core Operations: Code Generation, Atomic Single-Use Redemption & Concu
       .get(`/api/v1/admin/contacts/${privateContactId}`)
       .set("Authorization", `Bearer ${secondAccessToken}`);
     expect(forbiddenContact.status).toBe(404);
+
+    // Ownership must be enforced by the update query itself, not just by a prior read.
+    const beforeForbiddenUpdate = await request(app)
+      .get(`/api/v1/admin/contacts/${privateContactId}`)
+      .set("Authorization", `Bearer ${adminToken}`);
+    expect(beforeForbiddenUpdate.status).toBe(200);
+
+    const forbiddenUpdate = await request(app)
+      .patch(`/api/v1/admin/contacts/${privateContactId}`)
+      .set("Authorization", `Bearer ${secondAccessToken}`)
+      .send({ followUpStatus: "ARCHIVED", discussionNotes: "Cross-admin write attempt" });
+    expect(forbiddenUpdate.status).toBe(404);
+
+    const afterForbiddenUpdate = await request(app)
+      .get(`/api/v1/admin/contacts/${privateContactId}`)
+      .set("Authorization", `Bearer ${adminToken}`);
+    expect(afterForbiddenUpdate.status).toBe(200);
+    expect(afterForbiddenUpdate.body.data.followUpStatus).toBe(beforeForbiddenUpdate.body.data.followUpStatus);
+    expect(afterForbiddenUpdate.body.data.discussionNotes).toBe(beforeForbiddenUpdate.body.data.discussionNotes);
   });
 
 });
