@@ -15,7 +15,7 @@ afterEach(() => {
 describe("API client refresh handling", () => {
   it("retries a 401 with the newly issued access JWT, not the stale stored JWT", async () => {
     const authorizationHeaders: string[] = [];
-    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    const fetchMock = vi.fn(async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]): Promise<Response> => {
       const url = String(input);
       if (url.endsWith("/api/v1/auth/refresh")) {
         return jsonResponse(200, {
@@ -51,7 +51,7 @@ describe("API client refresh handling", () => {
 
   it("shares a single rotating refresh request across concurrent 401 responses", async () => {
     let refreshRequests = 0;
-    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    const fetchMock = vi.fn(async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]): Promise<Response> => {
       const url = String(input);
       if (url.endsWith("/api/v1/auth/refresh")) {
         refreshRequests += 1;
