@@ -76,6 +76,9 @@ export async function proxyToApi(request: NextRequest, apiPath: string): Promise
   // This is a server-to-server hop. Strip browser CORS metadata, but pass the
   // original public web origin for QR URL generation by the API.
   headers.delete("origin");
+  // The mobile-client marker controls whether the API returns bearer credentials
+  // in JSON. Never trust a browser-supplied value across the web proxy boundary.
+  headers.delete("x-connectme-client");
   headers.delete("x-connectme-public-origin");
   headers.set("x-connectme-public-origin", incoming.origin);
 
