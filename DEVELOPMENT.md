@@ -18,7 +18,7 @@ Connect Me is a pnpm/Turborepo TypeScript monorepo. Express is the authoritative
 
 **Docker Compose profiles:** Use `docker compose --profile api up --build -d api` for API + MySQL only, `docker compose --profile web up --build -d web` for a web container whose API is hosted elsewhere, or `docker compose --profile combined up --build -d` for both app services together. In web-only mode, set `COMPOSE_API_INTERNAL_URL` to an API URL reachable from inside the web container. The legacy `app` profile still launches both app services.
 
-**Independently hosted services:** Build/deploy `apps/api` and `apps/web` independently. Configure `API_INTERNAL_URL` on the web service to the API origin/private service address. Leave `NEXT_PUBLIC_API_BASE_URL` empty and use the Next.js same-origin proxy. The API derives same-origin CORS from the request host and Vercel system domains; it does not reflect arbitrary browser origins. Native mobile uses `EXPO_PUBLIC_API_URL` and normally sends no browser Origin header.
+**Independently hosted services:** Build/deploy `apps/api` and `apps/web` independently. Configure the server-only `API_INTERNAL_URL` on the web service to the API origin/private service address; browser requests use the Next.js same-origin proxy. The API derives same-origin CORS from the request host and Vercel system domains; it does not reflect arbitrary browser origins. Native mobile uses `EXPO_PUBLIC_API_URL` and normally sends no browser Origin header.
 
 ## Environment configuration
 
@@ -27,7 +27,7 @@ Connect Me is a pnpm/Turborepo TypeScript monorepo. Express is the authoritative
 3. Set `DATABASE_URL` to a literal URL usable from the host process (usually hostname `localhost`).
 4. Set `TEST_DATABASE_URL` to a separate database ending in `_test`.
 5. Generate distinct secrets using `openssl rand -hex 32` and set `SESSION_SECRET` and `JWT_SECRET`.
-6. Set `NEXT_PUBLIC_APP_URL` for the bootstrap CLI's setup link. `CORS_ORIGIN` and `QR_CANONICAL_ORIGIN` are no longer required or read. Browser traffic should use the same-origin web proxy; `NEXT_PUBLIC_API_BASE_URL` is not used.
+6. Set `NEXT_PUBLIC_APP_URL` for the bootstrap CLI's setup link. `CORS_ORIGIN` and `QR_CANONICAL_ORIGIN` are no longer required or read. Browser traffic should use the same-origin web proxy; `NEXT_PUBLIC_API_BASE_URL` has been removed; all browser API traffic goes through the same-origin proxy.
 
 There are no configured administrator credentials and no production fallback signing keys. The API fails fast if its database URL or signing secrets are missing/too short. CORS derives same-origin/Vercel hosts automatically. QR generation uses the public origin from the Next.js proxy, then Vercel deployment metadata/request host as a fallback.
 
