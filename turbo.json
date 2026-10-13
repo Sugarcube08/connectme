@@ -6,8 +6,7 @@
     "SESSION_SECRET",
     "JWT_SECRET",
     "API_INTERNAL_URL",
-    "NEXT_PUBLIC_APP_URL",
-    "EXPO_PUBLIC_APP_URL"
+    "NEXT_PUBLIC_APP_URL"
   ],
   "globalEnv": [
     "NODE_ENV",
