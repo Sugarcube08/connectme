@@ -27,6 +27,8 @@ model AdminUser {
   displayName        String?   @map("display_name")
   passwordHash       String?   @map("password_hash")
   isActive           Boolean   @default(false) @map("is_active")
+  // Nullable+unique: only one row may ever be marked as the initial administrator.
+  isInitialAdmin     Boolean?  @unique @map("is_initial_admin")
   isBootstrapPending Boolean   @default(true) @map("is_bootstrap_pending")
   bootstrapTokenHash String?   @unique @map("bootstrap_token_hash")
   bootstrapExpiresAt DateTime? @map("bootstrap_expires_at")
