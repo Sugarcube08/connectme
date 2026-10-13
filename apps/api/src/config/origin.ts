@@ -28,25 +28,6 @@ export function normalizeOrigin(value: string | undefined | null): string | null
   }
 }
 
-function originFromDeploymentHost(host: string | undefined): string | null {
-  if (!host?.trim()) return null;
-  // Vercel system variables provide hostnames without a scheme.
-  const value = host.includes("://") ? host : `https://${host}`;
-  return normalizeOrigin(value);
-}
-
-function deploymentOrigins(): Set<string> {
-  return new Set(
-    [
-      process.env.VERCEL_URL,
-      process.env.VERCEL_BRANCH_URL,
-      process.env.VERCEL_PROJECT_PRODUCTION_URL,
-    ]
-      .map(originFromDeploymentHost)
-      .filter((origin): origin is string => Boolean(origin))
-  );
-}
-
 /**
  * CORS is derived from the request host and Vercel's system URLs instead of an
  * operator-maintained CORS_ORIGIN value. The web frontend should use the
@@ -71,38 +52,3 @@ export function isAllowedCorsOrigin(origin: string, request: Request): boolean {
   }
 }
 
-/**
- * Resolves the origin where a QR link should open.
- *
- * Same-origin Next.js requests provide a server-generated
- * X-ConnectMe-Public-Origin header. Direct same-origin browser requests can use
- * Origin. Non-browser callers fall back to Vercel's stable production domain,
- * then the current request host. No QR origin environment variable is required.
- */
-export function resolvePublicOrigin(request: Request): string {
-  const forwardedPublicOrigin = normalizeOrigin(request.get("x-connectme-public-origin"));
-  if (forwardedPublicOrigin) return forwardedPublicOrigin;
-
-  const requestOrigin = request.get("origin");
-  if (requestOrigin && isAllowedCorsOrigin(requestOrigin, request)) {
-    return requestOrigin;
-  }
-
-  const deploymentOrigin =
-    originFromDeploymentHost(process.env.VERCEL_PROJECT_PRODUCTION_URL) ??
-    originFromDeploymentHost(process.env.VERCEL_URL) ??
-    originFromDeploymentHost(process.env.VERCEL_BRANCH_URL);
-  if (deploymentOrigin) return deploymentOrigin;
-
-  const host = request.get("host");
-  const requestOriginFromHost = normalizeOrigin(
-    host ? `${isProduction() ? "https" : request.protocol}://${host}` : undefined
-  );
-  if (requestOriginFromHost) return requestOriginFromHost;
-
-  if (!isProduction()) return "http://localhost:3000";
-
-  throw new Error(
-    "Unable to determine the public origin for this QR link. Serve code creation through the web proxy or use a Vercel deployment URL."
-  );
-}
