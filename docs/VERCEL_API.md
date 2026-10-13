@@ -37,7 +37,15 @@ For the web dashboard, keep the browser API base URL empty so browser requests g
 
 ## 2. Build and deploy the API project
 
-Connect `Sugarcube08/connectme` to Vercel and configure the project to build the API workspace (root directory `apps/api`, with the monorepo workspace/packages available to the build). Ensure the deployment build generates Prisma Client against the checked-in MySQL schema before bundling the API. The exact Vercel build/root-directory settings depend on whether your project is configured to build from the workspace root or the API subdirectory; do not deploy until the build includes `packages/database` and its generated Prisma client.
+Connect `Sugarcube08/connectme` to Vercel and configure a dedicated API project with **Root Directory = `apps/api`**. Keep the monorepo's files outside the app directory available to the build (the workspace lockfile and `packages/*` are required). The Vercel entry point is `apps/api/src/index.ts`, which default-exports the Express app; `src/server.ts` remains the normal Node/Docker listener.
+
+Use this build command in the API project's Build & Development Settings so Prisma Client and workspace dependencies are built before the API:
+
+```bash
+cd ../.. && pnpm exec turbo run build --filter=@connectme/api...
+```
+
+Use the repository-root pnpm lockfile for dependency installation. Leave the output directory unset; Vercel should package the Express function rather than serve a static build. Confirm the build log shows `@connectme/database` generated/built before `@connectme/api`. Do not deploy until the build includes `packages/database` and its generated Prisma client.
 
 After adding or changing Vercel environment variables, create a new deployment. Existing deployments do not inherit environment-variable changes retroactively.
 
