@@ -32,3 +32,44 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #6D3CE8;
 }
+
+/* Print stylesheet for visiting cards */
+@media print {
+  body {
+    background-color: #ffffff !important;
+    color: #111111 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .print-only {
+    display: block !important;
+  }
+
+  .print-cards-container {
+    display: grid !important;
+    grid-template-columns: repeat(2, 3.5in) !important;
+    gap: 0.25in !important;
+    padding: 0.25in !important;
+    justify-content: center !important;
+  }
+
+  .printable-visiting-card {
+    width: 3.5in !important;
+    height: 2.1in !important;
+    border: 1px solid #111111 !important;
+    border-radius: 8px !important;
+    padding: 14px !important;
+    background-color: #0B0B10 !important;
+    color: #F3EFE7 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    box-sizing: border-box !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+}

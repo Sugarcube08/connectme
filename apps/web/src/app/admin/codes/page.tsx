@@ -13,6 +13,7 @@ import {
   ExternalLink,
   Copy,
   Check,
+  Printer,
 } from "lucide-react";
 import { AccessCodeItem, GeneratedCodeDetail, CodeStatus } from "@connectme/contracts";
 import { apiClient } from "@/lib/api";
@@ -154,7 +155,8 @@ export default function AdminCodesPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <>
+      <div className="no-print space-y-6">
       {/* Header & Controls */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -391,7 +393,7 @@ export default function AdminCodesPage() {
 
       {/* Generated Results & QR Showcase Modal */}
       {generatedResults && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-md overflow-y-auto">
+        <div className="no-print fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-md overflow-y-auto">
           <div className="w-full max-w-2xl rounded-2xl border border-obsidian-border bg-obsidian-surface p-6 shadow-royal my-8">
             <div className="mb-4 flex items-center justify-between border-b border-obsidian-border pb-3">
               <div>
@@ -402,12 +404,23 @@ export default function AdminCodesPage() {
                   Download QR assets now. For security, raw tokens are only shown during creation.
                 </p>
               </div>
-              <button
-                onClick={() => setGeneratedResults(null)}
-                className="rounded-lg p-1 text-slate hover:text-warmIvory"
-              >
-                <X className="h-5 w-5" />
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-metallicGold/40 bg-metallicGold/10 px-3 py-1.5 text-xs font-semibold text-metallicGold hover:bg-metallicGold/20 transition"
+                  title="Print physical visiting cards sheet"
+                >
+                  <Printer className="h-3.5 w-3.5" />
+                  <span>Print Cards</span>
+                </button>
+                <button
+                  onClick={() => setGeneratedResults(null)}
+                  className="rounded-lg p-1 text-slate hover:text-warmIvory"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
             </div>
 
             <div className="max-h-[60vh] space-y-4 overflow-y-auto pr-1">
@@ -485,6 +498,60 @@ export default function AdminCodesPage() {
           </div>
         </div>
       )}
-    </div>
+      </div>
+
+      {/* Printable Visiting Cards View (Rendered strictly during browser print) */}
+      {generatedResults && (
+        <div className="hidden print-only print-cards-container">
+          {generatedResults.map((item) => (
+            <div
+              key={item.id}
+              className="printable-visiting-card flex flex-col justify-between"
+            >
+              <div className="flex items-center justify-between border-b border-obsidian-border/80 pb-1.5">
+                <div>
+                  <div className="text-[11px] font-extrabold tracking-wider text-warmIvory uppercase">
+                    CONNECT <span className="text-royalViolet">ME</span>
+                  </div>
+                  <div className="text-[8px] text-metallicGold tracking-wide">
+                    {item.label || "Devcon 2026"}
+                  </div>
+                </div>
+                <div className="text-[7px] font-bold uppercase tracking-widest text-royalViolet bg-royalViolet/10 px-1 py-0.5 rounded border border-royalViolet/30">
+                  SINGLE-USE PASS
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 my-auto py-1">
+                <div className="rounded bg-white p-1 shrink-0">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={item.qrDataUrl}
+                    alt="QR Code"
+                    className="h-16 w-16 object-contain"
+                  />
+                </div>
+                <div className="space-y-0.5">
+                  <div className="text-[9px] font-bold text-warmIvory leading-tight">
+                    Scan with camera to connect
+                  </div>
+                  <div className="text-[7.5px] text-slate-light leading-snug">
+                    Share your contact details directly with me in 10 seconds.
+                  </div>
+                  <div className="text-[7px] text-metallicGold font-mono">
+                    No app required • Mobile web
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between border-t border-obsidian-border/80 pt-1 text-[7px] text-slate">
+                <span>You share. We connect.</span>
+                <span className="font-mono">Single-use pass</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </>
   );
 }

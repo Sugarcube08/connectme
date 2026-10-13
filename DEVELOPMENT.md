@@ -189,6 +189,7 @@ Test suite: `apps/api/src/tests/api.test.ts` (Vitest v3.2.7)
 ---
 
 ## 7. Next Implementation Milestones
-- [ ] Export batch QR codes as printable sheet PDF layout (e.g. 10 per A4 page).
+- [x] Export batch QR codes as printable sheet visiting card layout (3.5" x 2" Devcon cards with print stylesheet).
+- [x] Next.js transparent API proxy rewrite for same-origin binary downloads and cookies.
 - [ ] Optional webhook notification to Discord or Telegram when a new contact is submitted at Devcon.
 - [ ] Offline-first queueing for the Expo mobile app for low-connectivity convention center environments.

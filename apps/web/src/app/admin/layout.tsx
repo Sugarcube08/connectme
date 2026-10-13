@@ -15,9 +15,9 @@ import { apiClient } from "@/lib/api";
 
 export default function AdminLayout({
   children,
-}: {
+}: Readonly<{
   children: React.ReactNode;
-}) {
+}>) {
   const pathname = usePathname();
   const router = useRouter();
 
@@ -45,7 +45,7 @@ export default function AdminLayout({
   return (
     <div className="min-h-screen bg-obsidian">
       {/* Top Navbar */}
-      <header className="sticky top-0 z-40 border-b border-obsidian-border bg-obsidian-surface/90 backdrop-blur-md">
+      <header className="no-print sticky top-0 z-40 border-b border-obsidian-border bg-obsidian-surface/90 backdrop-blur-md">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6">
           <div className="flex items-center gap-6">
             <Link href="/admin" className="flex items-center gap-2">
