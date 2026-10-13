@@ -43,5 +43,11 @@ describe("isValidMySqlUrl", () => {
   it("rejects invalid ports and multi-segment database paths", () => {
     expect(isValidMySqlUrl("mysql://user:pass@db.example.test:99999/connectme")).toBe(false);
     expect(isValidMySqlUrl("mysql://user:pass@db.example.test:3306/connectme/other")).toBe(false);
+    expect(isValidMySqlUrl("mysql://user:pass@db.example.test:3306/connectme+test")).toBe(false);
+  });
+
+  it("rejects invalid unescaped characters in query values", () => {
+    expect(isValidMySqlUrl("mysql://user:pass@db.example.test:3306/connectme?sslcert=cert file.pem")).toBe(false);
+    expect(isValidMySqlUrl("mysql://user:pass@db.example.test:3306/connectme?sslaccept=strict&connection_limit=5")).toBe(true);
   });
 });
