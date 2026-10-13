@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { defineConfig } from "vitest/config";
+import { isValidMySqlUrl } from "./src/config/mysql-url";
 
 // Load the developer's monorepo .env before tests import the API/Prisma.
 const loadEnvFile = (process as any).loadEnvFile as
@@ -19,8 +20,8 @@ if (loadEnvFile) {
 // API integration tests delete database rows. Prefer TEST_DATABASE_URL and never
 // silently run them against a non-test database.
 const testDatabaseUrl = process.env.TEST_DATABASE_URL?.trim();
-if (testDatabaseUrl && !testDatabaseUrl.startsWith("mysql://")) {
-  throw new Error("TEST_DATABASE_URL must be a MySQL URL beginning with mysql://.");
+if (testDatabaseUrl && !isValidMySqlUrl(testDatabaseUrl)) {
+  throw new Error("TEST_DATABASE_URL must be a valid MySQL URL. Percent-encode reserved characters in URL components.");
 }
 if (testDatabaseUrl) {
   process.env.DATABASE_URL = testDatabaseUrl;
