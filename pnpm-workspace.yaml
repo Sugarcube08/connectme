@@ -3,9 +3,16 @@ packages:
   - "packages/*"
 
 allowBuilds:
+  '@cloudflare/workerd-darwin-64': true
+  '@cloudflare/workerd-darwin-arm64': true
+  '@cloudflare/workerd-linux-64': true
+  '@cloudflare/workerd-linux-arm64': true
+  '@cloudflare/workerd-windows-64': true
   '@prisma/client': true
   '@prisma/engines': true
   '@scarf/scarf': true
   esbuild: true
   prisma: true
   sharp: true
+  workerd: true
+

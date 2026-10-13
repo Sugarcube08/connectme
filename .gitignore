@@ -28,6 +28,8 @@ dist/
 build/
 .next/
 out/
+.open-next/
+.wrangler/
 .expo/
 web-build/
 coverage/
