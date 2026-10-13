@@ -1,4 +1,5 @@
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
+import { prisma } from "@connectme/database";
 import bcrypt from "bcryptjs";
 import { SignJWT, jwtVerify } from "jose";
 import { UserRepository } from "../repositories/user.repository";
@@ -9,6 +10,7 @@ import {
   BootstrapSetupInput,
   BootstrapStatusDTO,
   AdminUserDTO,
+  CreateAdminInput,
 } from "@connectme/contracts";
 import {
   UnauthorizedError,
@@ -17,6 +19,15 @@ import {
   GoneError,
 } from "../errors/app-error";
 
+const REFRESH_TOKEN_SECONDS = 7 * 24 * 60 * 60;
+
+type AuthSessionResult = {
+  user: AdminUserDTO;
+  token: string;
+  webSession: string;
+  refreshToken: string;
+};
+
 export class AuthService {
   private sessionSecret = new TextEncoder().encode(config.SESSION_SECRET);
   private jwtSecret = new TextEncoder().encode(config.JWT_SECRET);
@@ -24,30 +35,18 @@ export class AuthService {
   constructor(private userRepo = new UserRepository()) {}
 
   async getBootstrapStatus(): Promise<BootstrapStatusDTO> {
-    // Even a stale pending row must not make setup appear open once an admin exists.
-    if (await this.userRepo.findActiveAdmin()) {
-      return { isBootstrapPending: false };
-    }
-
+    if (await this.userRepo.findActiveAdmin()) return { isBootstrapPending: false };
     const pending = await this.userRepo.findPendingBootstrap();
     if (!pending) return { isBootstrapPending: false };
-
-    const hasExpired = !pending.bootstrapExpiresAt || pending.bootstrapExpiresAt < new Date();
     return {
       isBootstrapPending: true,
-      hasExpired,
+      hasExpired: !pending.bootstrapExpiresAt || pending.bootstrapExpiresAt < new Date(),
     };
   }
 
-  async setupBootstrap(
-    input: BootstrapSetupInput,
-    publicOrigin?: string
-  ): Promise<{ user: AdminUserDTO; token: string; webSession: string }> {
+  async setupBootstrap(input: BootstrapSetupInput, publicOrigin?: string): Promise<AuthSessionResult> {
     if (await this.userRepo.findActiveAdmin()) {
-      throw new ForbiddenError(
-        "Administrator setup is already complete and cannot be reopened.",
-        "BOOTSTRAP_ALREADY_COMPLETED"
-      );
+      throw new ForbiddenError("Administrator setup is already complete and cannot be reopened.", "BOOTSTRAP_ALREADY_COMPLETED");
     }
 
     const username = input.username.trim().toLowerCase();
@@ -58,17 +57,10 @@ export class AuthService {
     const tokenHash = createHash("sha256").update(input.token.trim()).digest("hex");
     const pendingUser = await this.userRepo.findByBootstrapTokenHash(tokenHash);
     if (!pendingUser || !pendingUser.isBootstrapPending || pendingUser.isActive) {
-      throw new UnauthorizedError(
-        "Invalid, consumed, or unrecognized one-time bootstrap token.",
-        "INVALID_BOOTSTRAP_TOKEN"
-      );
+      throw new UnauthorizedError("Invalid, consumed, or unrecognized one-time bootstrap token.", "INVALID_BOOTSTRAP_TOKEN");
     }
-
     if (!pendingUser.bootstrapExpiresAt || pendingUser.bootstrapExpiresAt < new Date()) {
-      throw new GoneError(
-        "Bootstrap setup token has expired. An authorized operator must provision a new token.",
-        "BOOTSTRAP_TOKEN_EXPIRED"
-      );
+      throw new GoneError("Bootstrap setup token has expired. An authorized operator must provision a new token.", "BOOTSTRAP_TOKEN_EXPIRED");
     }
 
     const passwordHash = await bcrypt.hash(input.password, 12);
@@ -88,72 +80,190 @@ export class AuthService {
       }
       throw error;
     }
-
     if (!activatedUser) {
-      throw new ForbiddenError(
-        "This setup token has already been consumed or setup is no longer available.",
-        "BOOTSTRAP_ALREADY_COMPLETED"
-      );
+      throw new ForbiddenError("This setup token has already been consumed or setup is no longer available.", "BOOTSTRAP_ALREADY_COMPLETED");
     }
-
-    const userDTO = serializeAdminUser(activatedUser);
-    const token = await this.createMobileToken(userDTO.id, userDTO.username);
-    const webSession = await this.createWebSession(userDTO.id, userDTO.username);
-    return { user: userDTO, token, webSession };
+    return this.createAuthSession(serializeAdminUser(activatedUser));
   }
 
-  async login(
-    input: AdminLoginInput
-  ): Promise<{ user: AdminUserDTO; token: string; webSession: string }> {
+  async login(input: AdminLoginInput): Promise<AuthSessionResult> {
     const user = await this.userRepo.findByUsername(input.username);
-
     if (!user || !user.isActive || !user.passwordHash) {
       throw new UnauthorizedError("Invalid username or password.", "INVALID_CREDENTIALS");
     }
-
     const match = await bcrypt.compare(input.password, user.passwordHash);
-    if (!match) {
-      throw new UnauthorizedError("Invalid username or password.", "INVALID_CREDENTIALS");
-    }
+    if (!match) throw new UnauthorizedError("Invalid username or password.", "INVALID_CREDENTIALS");
+    return this.createAuthSession(serializeAdminUser(user));
+  }
 
-    const userDTO = serializeAdminUser(user);
-    const token = await this.createMobileToken(userDTO.id, userDTO.username);
-    const webSession = await this.createWebSession(userDTO.id, userDTO.username);
-    return { user: userDTO, token, webSession };
+  private async createAuthSession(user: AdminUserDTO): Promise<AuthSessionResult> {
+    const token = await this.createMobileToken(user.id, user.username);
+    const webSession = await this.createWebSession(user.id, user.username);
+    const refreshToken = await this.createRefreshToken(user.id);
+    return { user, token, webSession, refreshToken };
+  }
+
+  async createAdmin(actingAdminId: string, input: CreateAdminInput): Promise<AdminUserDTO> {
+    const actor = await this.userRepo.findById(actingAdminId);
+    if (!actor?.isActive || actor.isInitialAdmin !== true) {
+      throw new ForbiddenError("Only the initial administrator can provision additional admin accounts.", "ADMIN_PROVISIONING_FORBIDDEN");
+    }
+    const username = input.username.trim().toLowerCase();
+    if (!/^[a-z0-9][a-z0-9._-]{2,31}$/.test(username)) {
+      throw new ValidationError("Username must be 3–32 characters and use only letters, numbers, dots, underscores, or hyphens.");
+    }
+    try {
+      const user = await this.userRepo.createAdmin({
+        username,
+        displayName: input.displayName,
+        passwordHash: await bcrypt.hash(input.password, 12),
+      });
+      return serializeAdminUser(user);
+    } catch (error) {
+      if (typeof error === "object" && error !== null && "code" in error && error.code === "P2002") {
+        throw new ValidationError("That username is unavailable. Choose another username.");
+      }
+      throw error;
+    }
   }
 
   async createWebSession(userId: string, username: string): Promise<string> {
-    return new SignJWT({ userId, username })
+    return new SignJWT({ userId, username, tokenUse: "web_access" })
       .setProtectedHeader({ alg: "HS256" })
       .setIssuedAt()
-      .setExpirationTime("7d")
+      .setExpirationTime("72h")
       .sign(this.sessionSecret);
   }
 
   async createMobileToken(userId: string, username: string): Promise<string> {
-    return new SignJWT({ userId, username })
+    return new SignJWT({ userId, username, tokenUse: "mobile_access" })
       .setProtectedHeader({ alg: "HS256" })
       .setIssuedAt()
-      .setExpirationTime("30d")
+      .setExpirationTime("72h")
       .sign(this.jwtSecret);
   }
 
   async verifyWebSession(token: string): Promise<{ userId: string; username: string } | null> {
     try {
       const { payload } = await jwtVerify(token, this.sessionSecret);
-      return { userId: payload.userId as string, username: payload.username as string };
-    } catch {
-      return null;
-    }
+      if (payload.tokenUse !== "web_access" || typeof payload.userId !== "string" || typeof payload.username !== "string") return null;
+      return { userId: payload.userId, username: payload.username };
+    } catch { return null; }
   }
 
   async verifyMobileToken(token: string): Promise<{ userId: string; username: string } | null> {
     try {
       const { payload } = await jwtVerify(token, this.jwtSecret);
-      return { userId: payload.userId as string, username: payload.username as string };
-    } catch {
-      return null;
+      if (payload.tokenUse !== "mobile_access" || typeof payload.userId !== "string" || typeof payload.username !== "string") return null;
+      return { userId: payload.userId, username: payload.username };
+    } catch { return null; }
+  }
+
+  private async createRefreshToken(adminUserId: string): Promise<string> {
+    const token = randomBytes(32).toString("base64url");
+    await prisma.adminRefreshToken.create({
+      data: {
+        adminUserId,
+        tokenHash: createHash("sha256").update(token).digest("hex"),
+        expiresAt: new Date(Date.now() + REFRESH_TOKEN_SECONDS * 1000),
+      },
+    });
+    return token;
+  }
+
+  async refresh(rawToken: string): Promise<AuthSessionResult> {
+    if (!rawToken?.trim()) throw new UnauthorizedError("Refresh token is required.", "INVALID_REFRESH_TOKEN");
+    const tokenHash = createHash("sha256").update(rawToken).digest("hex");
+    const rotation = await this.rotateRefreshToken(tokenHash);
+    if (rotation.kind !== "success") {
+      throw new UnauthorizedError("Refresh token is invalid, expired, revoked, or already used. Sign in again.", "INVALID_REFRESH_TOKEN");
     }
+    return this.createRotatedSession(rotation.user, rotation.refreshToken);
+  }
+
+  private async createRotatedSession(
+    user: AdminUserDTO,
+    refreshToken: string
+  ): Promise<AuthSessionResult> {
+    return {
+      user,
+      token: await this.createMobileToken(user.id, user.username),
+      webSession: await this.createWebSession(user.id, user.username),
+      refreshToken,
+    };
+  }
+
+  private async rotateRefreshToken(tokenHash: string): Promise<
+    { kind: "success"; user: AdminUserDTO; refreshToken: string } | { kind: "invalid" }
+  > {
+    try {
+      return await prisma.$transaction(async (tx) => {
+        const record = await tx.adminRefreshToken.findUnique({
+          where: { tokenHash },
+          include: { adminUser: true },
+        });
+        if (!record) return { kind: "invalid" } as const;
+
+        const now = new Date();
+        if (record.revokedAt) {
+          // A revoked token presented again indicates possible theft/replay. Revoke
+          // every still-active refresh token for this account.
+          await tx.adminRefreshToken.updateMany({
+            where: { adminUserId: record.adminUserId, revokedAt: null },
+            data: { revokedAt: now },
+          });
+          return { kind: "invalid" } as const;
+        }
+        if (record.expiresAt <= now || !record.adminUser.isActive) {
+          await tx.adminRefreshToken.updateMany({
+            where: { id: record.id, revokedAt: null },
+            data: { revokedAt: now },
+          });
+          if (!record.adminUser.isActive) {
+            await tx.adminRefreshToken.updateMany({
+              where: { adminUserId: record.adminUserId, revokedAt: null },
+              data: { revokedAt: now },
+            });
+          }
+          return { kind: "invalid" } as const;
+        }
+
+        const consumed = await tx.adminRefreshToken.updateMany({
+          where: { id: record.id, revokedAt: null, expiresAt: { gt: now } },
+          data: { revokedAt: now },
+        });
+        if (consumed.count !== 1) {
+          await tx.adminRefreshToken.updateMany({
+            where: { adminUserId: record.adminUserId, revokedAt: null },
+            data: { revokedAt: now },
+          });
+          return { kind: "invalid" } as const;
+        }
+
+        const nextToken = randomBytes(32).toString("base64url");
+        await tx.adminRefreshToken.create({
+          data: {
+            adminUserId: record.adminUserId,
+            tokenHash: createHash("sha256").update(nextToken).digest("hex"),
+            expiresAt: new Date(now.getTime() + REFRESH_TOKEN_SECONDS * 1000),
+          },
+        });
+        return { kind: "success", user: serializeAdminUser(record.adminUser), refreshToken: nextToken } as const;
+      }, { isolationLevel: "Serializable" });
+    } catch (error) {
+      if (typeof error === "object" && error !== null && "code" in error && error.code === "P2034") {
+        return { kind: "invalid" };
+      }
+      throw error;
+    }
+  }
+
+  async revokeRefreshToken(rawToken?: string): Promise<void> {
+    if (!rawToken?.trim()) return;
+    await prisma.adminRefreshToken.updateMany({
+      where: { tokenHash: createHash("sha256").update(rawToken).digest("hex"), revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
   }
 
   async getUserById(id: string): Promise<AdminUserDTO | null> {

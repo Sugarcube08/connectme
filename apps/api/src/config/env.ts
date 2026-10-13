@@ -6,14 +6,13 @@ import { isValidMySqlUrl } from "./mysql-url";
 
 // Respect process/Vercel/CI variables first. For files, a non-empty workspace-local
 // value wins; an empty template placeholder falls back to the root .env.
-// CORS_ORIGIN and QR_CANONICAL_ORIGIN are intentionally not runtime requirements:
-// CORS is derived from the request/deployment host, and QR origin comes from the web proxy.
+// Access-code HMAC uses a dedicated pepper so DB-only leaks do not permit offline
+// token checking. CORS/QR origins are derived and need no legacy environment values.
 const environmentProvidedByProcess = new Set(Object.keys(process.env));
 
 function loadEnvFallback(fileName: string): void {
   if (!existsSync(fileName)) return;
   const fileValues = parseEnv(readFileSync(fileName, "utf8"));
-
   for (const [key, value] of Object.entries(fileValues)) {
     if (environmentProvidedByProcess.has(key)) continue;
     if (process.env[key] === undefined || process.env[key] === "") {
@@ -39,13 +38,11 @@ const EnvSchema = z.object({
       "DATABASE_URL must be mysql://USER:PASSWORD@HOST:3306/DATABASE; percent-encode reserved characters in URL components."
     ),
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
-  // No fallback values: generate independent random values per environment.
   SESSION_SECRET: z.string().min(32, "SESSION_SECRET must be at least 32 characters."),
   JWT_SECRET: z.string().min(32, "JWT_SECRET must be at least 32 characters."),
+  ACCESS_CODE_PEPPER: z.string().min(32, "ACCESS_CODE_PEPPER must be at least 32 characters."),
   MAX_IMAGE_SIZE_BYTES: z.coerce.number().int().positive().default(2097152),
   MAX_BATCH_CODE_COUNT: z.coerce.number().int().min(1).max(100).default(100),
 });
 
-const parsed = EnvSchema.parse(process.env);
-
-export const config = parsed;
+export const config = EnvSchema.parse(process.env);

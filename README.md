@@ -9,8 +9,8 @@ Connect Me is a lightweight, single-use QR contact-capture system for in-person 
 - Public pages never disclose the owner's phone, email, vCard, social links, or personal identity.
 - No reciprocal contact exchange, public attendee directory, attendee login, OTP, SMS, or AI service is required.
 - Each access token can be redeemed once. Redemption is atomic in MySQL, including under concurrent requests.
-- Optional profile images are normalized and stored in a separate MySQL `LONGBLOB` table.
-- The owner chooses their own administrator username and password during first-time setup. There are no preset admin credentials.
+- Optional profile images are normalized and stored in a separate MySQL `LONGBLOB` table. New redeem-code tokens are stored as HMAC-SHA-256 digests using `ACCESS_CODE_PEPPER`; the raw token is returned only when the code is created.
+- The owner chooses their own administrator username and password during first-time setup. The initial administrator can provision additional admins. Access JWTs expire after 72 hours; hashed, one-time rotating refresh tokens expire after 7 days.
 
 ## Architecture
 
@@ -68,7 +68,7 @@ Edit `.env`. Choose a MySQL application user/password and a distinct root passwo
 ```bash
 openssl rand -hex 24  # paste output into MYSQL_ROOT_PASSWORD
 openssl rand -hex 32  # paste output into SESSION_SECRET
-openssl rand -hex 32  # run again; paste output into JWT_SECRET
+openssl rand -hex 32  # run again; paste output into JWT_SECRET\nopenssl rand -hex 32  # run again; paste output into ACCESS_CODE_PEPPER
 openssl rand -hex 24  # paste output into MYSQL_PASSWORD
 ```
 

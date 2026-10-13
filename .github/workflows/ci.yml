@@ -48,11 +48,12 @@ jobs:
           corepack prepare pnpm@12.11.2 --activate
           pnpm --version
 
-      - name: Generate ephemeral test signing keys
+      - name: Generate ephemeral test secrets
         shell: bash
         run: |
           echo "SESSION_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
           echo "JWT_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+          echo "ACCESS_CODE_PEPPER=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
 
       - name: Install workspace dependencies
         run: pnpm install --frozen-lockfile
@@ -81,6 +82,7 @@ jobs:
           export MYSQL_DATABASE=connectme_test
           export SESSION_SECRET="$(openssl rand -hex 32)"
           export JWT_SECRET="$(openssl rand -hex 32)"
+          export ACCESS_CODE_PEPPER="$(openssl rand -hex 32)"
           export NEXT_PUBLIC_APP_URL=https://connectme.example.test
           docker compose config --quiet
 

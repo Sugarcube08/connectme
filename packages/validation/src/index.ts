@@ -12,42 +12,22 @@ export const ContactSubmissionSchema = z.object({
     .min(5, "Phone number is required")
     .max(30, "Phone number must be under 30 characters")
     .regex(/^[+0-9\s\-().]{5,30}$/, "Invalid phone number format"),
-  email: z
-    .string()
-    .trim()
-    .email("Invalid email address")
-    .max(150, "Email must be under 150 characters")
-    .optional()
-    .or(z.literal("")),
-  organization: z
-    .string()
-    .trim()
-    .max(100, "Organization name must be under 100 characters")
-    .optional()
-    .or(z.literal("")),
-  role: z
-    .string()
-    .trim()
-    .max(100, "Role must be under 100 characters")
-    .optional()
-    .or(z.literal("")),
-  profileUrl: z
-    .string()
-    .trim()
-    .max(250, "Profile link must be under 250 characters")
-    .optional()
-    .or(z.literal("")),
-  discussionNotes: z
-    .string()
-    .trim()
-    .max(1000, "Discussion notes must be under 1000 characters")
-    .optional()
-    .or(z.literal("")),
+  email: z.string().trim().email("Invalid email address").max(150).optional().or(z.literal("")),
+  organization: z.string().trim().max(100).optional().or(z.literal("")),
+  role: z.string().trim().max(100).optional().or(z.literal("")),
+  profileUrl: z.string().trim().max(250).optional().or(z.literal("")),
+  discussionNotes: z.string().trim().max(1000).optional().or(z.literal("")),
 });
 
 export const AdminLoginSchema = z.object({
   username: z.string().trim().min(3, "Username must be at least 3 characters"),
   password: z.string().min(8, "Password must be at least 8 characters"),
+});
+
+export const CreateAdminSchema = z.object({
+  username: z.string().trim().min(3).max(32).regex(/^[a-z0-9][a-z0-9._-]*$/i),
+  displayName: z.string().trim().max(100).optional(),
+  password: z.string().min(8).max(128).regex(/[A-Z]/).regex(/[0-9]/),
 });
 
 export const BootstrapSetupSchema = z.object({
@@ -85,6 +65,7 @@ export const UpdateSettingsSchema = z.object({
 
 export type ContactSubmissionInput = z.infer<typeof ContactSubmissionSchema>;
 export type AdminLoginInput = z.infer<typeof AdminLoginSchema>;
+export type CreateAdminInput = z.infer<typeof CreateAdminSchema>;
 export type BootstrapSetupInput = z.infer<typeof BootstrapSetupSchema>;
 export type GenerateCodeInput = z.infer<typeof GenerateCodeSchema>;
 export type BatchGenerateCodeInput = z.infer<typeof BatchGenerateCodeSchema>;

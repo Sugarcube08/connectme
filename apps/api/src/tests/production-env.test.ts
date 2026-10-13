@@ -11,6 +11,7 @@ describe("production environment configuration", () => {
     vi.stubEnv("DATABASE_URL", "mysql://connectme_user:testpassword@127.0.0.1:3306/connectme");
     vi.stubEnv("SESSION_SECRET", "s".repeat(32));
     vi.stubEnv("JWT_SECRET", "j".repeat(32));
+    vi.stubEnv("ACCESS_CODE_PEPPER", "p".repeat(32));
     vi.stubEnv("CORS_ORIGIN", undefined);
     vi.stubEnv("QR_CANONICAL_ORIGIN", undefined);
     vi.resetModules();

@@ -3,55 +3,43 @@ import { prisma, AccessCode, CodeStatus } from "@connectme/database";
 export class CodeRepository {
   async create(data: {
     tokenHash: string;
+    createdByAdminId: string;
     label?: string | null;
     expiresAt?: Date | null;
   }): Promise<AccessCode> {
     return prisma.accessCode.create({
       data: {
         tokenHash: data.tokenHash,
+        createdByAdminId: data.createdByAdminId,
         label: data.label || null,
         expiresAt: data.expiresAt || null,
       },
     });
   }
 
-  async findByTokenHash(tokenHash: string) {
-    return prisma.accessCode.findUnique({
-      where: { tokenHash },
-      include: {
-        submission: {
-          select: { id: true, fullName: true },
-        },
-      },
+  async findByTokenHashes(tokenHashes: string[]) {
+    return prisma.accessCode.findFirst({
+      where: { tokenHash: { in: tokenHashes } },
+      include: { submission: { select: { id: true, fullName: true } } },
     });
   }
 
-  async findById(id: string) {
-    return prisma.accessCode.findUnique({
-      where: { id },
-      include: {
-        submission: {
-          select: { id: true, fullName: true },
-        },
-      },
-    });
-  }
-
-  async revoke(id: string): Promise<boolean> {
+  async revoke(id: string, adminUserId: string): Promise<boolean> {
     const res = await prisma.accessCode.updateMany({
-      where: { id, status: "ACTIVE" },
+      where: { id, createdByAdminId: adminUserId, status: "ACTIVE" },
       data: { status: "REVOKED", revokedAt: new Date() },
     });
     return res.count > 0;
   }
 
   async list(params: {
+    adminUserId: string;
     skip: number;
     take: number;
     status?: CodeStatus | "EXPIRED";
     search?: string;
   }) {
-    const where: any = {};
+    const where: any = { createdByAdminId: params.adminUserId };
 
     if (params.status) {
       if (params.status === "EXPIRED") {
@@ -65,9 +53,7 @@ export class CodeRepository {
       }
     }
 
-    if (params.search) {
-      where.label = { contains: params.search };
-    }
+    if (params.search) where.label = { contains: params.search };
 
     const [items, total] = await Promise.all([
       prisma.accessCode.findMany({
@@ -75,11 +61,7 @@ export class CodeRepository {
         skip: params.skip,
         take: params.take,
         orderBy: { createdAt: "desc" },
-        include: {
-          submission: {
-            select: { id: true, fullName: true },
-          },
-        },
+        include: { submission: { select: { id: true, fullName: true } } },
       }),
       prisma.accessCode.count({ where }),
     ]);
@@ -87,14 +69,11 @@ export class CodeRepository {
     return { items, total };
   }
 
-  async exportAll() {
+  async exportAll(adminUserId: string) {
     return prisma.accessCode.findMany({
+      where: { createdByAdminId: adminUserId },
       orderBy: { createdAt: "desc" },
-      include: {
-        submission: {
-          select: { fullName: true },
-        },
-      },
+      include: { submission: { select: { fullName: true } } },
     });
   }
 }

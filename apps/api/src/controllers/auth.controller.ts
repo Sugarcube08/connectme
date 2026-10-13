@@ -3,86 +3,90 @@ import { AuthService } from "../services/auth.service";
 import { config } from "../config/env";
 import { normalizeOrigin } from "../config/origin";
 
+const isMobileClient = (req: Request) => req.get("x-connectme-client") === "mobile";
+const accessCookie = {
+  httpOnly: true,
+  secure: config.NODE_ENV === "production",
+  sameSite: "lax" as const,
+  maxAge: 72 * 60 * 60 * 1000,
+  path: "/",
+};
+const refreshCookie = {
+  httpOnly: true,
+  secure: config.NODE_ENV === "production",
+  sameSite: "lax" as const,
+  maxAge: 7 * 24 * 60 * 60 * 1000,
+  path: "/",
+};
+
 export class AuthController {
   constructor(private authService = new AuthService()) {}
 
-  getBootstrapStatus = async (req: Request, res: Response, next: NextFunction) => {
+  private setCookies(res: Response, result: { webSession: string; refreshToken: string }) {
+    res.cookie("connectme_session", result.webSession, accessCookie);
+    res.cookie("connectme_refresh", result.refreshToken, refreshCookie);
+  }
+
+  private authResponse(req: Request, res: Response, result: {
+    user: unknown; token: string; webSession: string; refreshToken: string;
+  }) {
+    this.setCookies(res, result);
+    return res.status(200).json({
+      success: true,
+      data: {
+        user: result.user,
+        token: result.token,
+        ...(isMobileClient(req) ? { refreshToken: result.refreshToken } : {}),
+      },
+    });
+  }
+
+  getBootstrapStatus = async (_req: Request, res: Response, next: NextFunction) => {
     try {
-      const status = await this.authService.getBootstrapStatus();
-      return res.status(200).json({ success: true, data: status });
-    } catch (err) {
-      next(err);
-    }
+      return res.status(200).json({ success: true, data: await this.authService.getBootstrapStatus() });
+    } catch (err) { next(err); }
   };
 
   setupBootstrap = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const publicOrigin = normalizeOrigin(req.get("x-connectme-public-origin")) ?? undefined;
       const result = await this.authService.setupBootstrap(req.body, publicOrigin);
-
-      // Set HTTP-only session cookie for browser
-      res.cookie("connectme_session", result.webSession, {
-        httpOnly: true,
-        secure: config.NODE_ENV === "production",
-        sameSite: config.NODE_ENV === "production" ? "none" : "lax",
-        maxAge: 7 * 24 * 3600 * 1000,
-        path: "/",
-      });
-
-      return res.status(200).json({
-        success: true,
-        data: {
-          user: result.user,
-          token: result.token,
-        },
-      });
-    } catch (err) {
-      next(err);
-    }
+      return this.authResponse(req, res, result);
+    } catch (err) { next(err); }
   };
 
   login = async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const result = await this.authService.login(req.body);
+      return this.authResponse(req, res, await this.authService.login(req.body));
+    } catch (err) { next(err); }
+  };
 
-      res.cookie("connectme_session", result.webSession, {
-        httpOnly: true,
-        secure: config.NODE_ENV === "production",
-        sameSite: config.NODE_ENV === "production" ? "none" : "lax",
-        maxAge: 7 * 24 * 3600 * 1000,
-        path: "/",
-      });
+  refresh = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const refreshToken = String(req.body?.refreshToken || req.cookies?.connectme_refresh || "");
+      return this.authResponse(req, res, await this.authService.refresh(refreshToken));
+    } catch (err) { next(err); }
+  };
 
-      return res.status(200).json({
-        success: true,
-        data: {
-          user: result.user,
-          token: result.token,
-        },
-      });
+  logout = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      await this.authService.revokeRefreshToken(String(req.body?.refreshToken || req.cookies?.connectme_refresh || ""));
+      res.clearCookie("connectme_session", { ...accessCookie, maxAge: undefined });
+      res.clearCookie("connectme_refresh", { ...refreshCookie, maxAge: undefined });
+      return res.status(200).json({ success: true, data: { message: "Successfully logged out." } });
     } catch (err) {
       next(err);
     }
   };
 
-  logout = async (req: Request, res: Response) => {
-    res.clearCookie("connectme_session", {
-      httpOnly: true,
-      secure: config.NODE_ENV === "production",
-      sameSite: config.NODE_ENV === "production" ? "none" : "lax",
-      path: "/",
-    });
-
-    return res.status(200).json({
-      success: true,
-      data: { message: "Successfully logged out." },
-    });
+  createAdmin = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const admin = await this.authService.createAdmin(req.adminUser!.id, req.body);
+      return res.status(201).json({ success: true, data: { user: admin } });
+    } catch (err) { next(err); }
   };
 
   getMe = async (req: Request, res: Response) => {
-    return res.status(200).json({
-      success: true,
-      data: { user: req.adminUser },
-    });
+    return res.status(200).json({ success: true, data: { user: req.adminUser } });
   };
 }
