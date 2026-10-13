@@ -6,6 +6,8 @@ This guide covers deploying `apps/api` as the first Vercel project. The Next.js 
 
 Provision a managed MySQL database through your chosen provider. Use a **new, empty database** for the MySQL migration baseline in this repository. Do not point this migration history at an old PostgreSQL database.
 
+The checked-in `apps/api/.env.example` documents local API settings. Vercel does not load this file automatically; set the variables in the API project's Environment Variables settings.
+
 Set the API project's production environment variables in Vercel:
 
 | Variable | Required | Value |
@@ -24,7 +26,7 @@ openssl rand -hex 32
 openssl rand -hex 32
 ```
 
-Paste the outputs into Vercel's Environment Variables settings. Never add real values to `.env.example`, commit them, or expose them as `NEXT_PUBLIC_*` variables.
+Paste the outputs into Vercel's Environment Variables settings. Never add real values to `.env.example`, commit them, or expose them as `NEXT_PUBLIC_*` variables. Prisma requires special characters in URL components—including usernames and passwords—to be percent-encoded. Example: `p@ss:word%` becomes `p%40ss%3Aword%25`. Keep the provider-issued connection URL encoded as supplied; do not manually decode it.
 
 ### Removed origin variables
 
