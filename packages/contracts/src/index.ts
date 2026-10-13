@@ -17,7 +17,6 @@ export interface AdminUserDTO {
 
 export interface BootstrapStatusDTO {
   isBootstrapPending: boolean;
-  username?: string;
   hasExpired?: boolean;
 }
 
