@@ -2,6 +2,8 @@
 
 This guide covers the supported deployment shapes for Connect Me. The Express API and Next.js web application remain separate deployable processes in all modes; “combined” means one public web origin, not merging the API into Next.js.
 
+For the Vercel-first API deployment path, see [Deploy the Connect Me API to Vercel](VERCEL_API.md).
+
 **Database provider:** Connect Me now targets MySQL through Prisma. The PostgreSQL migration history has been replaced with a fresh MySQL baseline because Prisma migrations are provider-specific. Use an empty MySQL database for this baseline. If you have valuable data in a previous PostgreSQL database, export and migrate that data separately before switching; do not run this baseline against the old PostgreSQL database.
 
 ## 1. Required configuration
