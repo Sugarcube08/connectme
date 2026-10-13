@@ -70,3 +70,22 @@ jobs:
 
       - name: Build workspaces
         run: pnpm build
+
+      - name: Validate Docker Compose configuration
+        shell: bash
+        run: |
+          export POSTGRES_USER=connectme_test
+          export POSTGRES_PASSWORD="$(openssl rand -hex 24)"
+          export POSTGRES_DB=connectme_test
+          export SESSION_SECRET="$(openssl rand -hex 32)"
+          export JWT_SECRET="$(openssl rand -hex 32)"
+          export CORS_ORIGIN=https://connectme.example.test
+          export QR_CANONICAL_ORIGIN=https://connectme.example.test
+          export NEXT_PUBLIC_APP_URL=https://connectme.example.test
+          docker compose config --quiet
+
+      - name: Build API container target
+        run: docker build --target api -t connectme-api-ci .
+
+      - name: Build web container target
+        run: docker build --target web -t connectme-web-ci .
