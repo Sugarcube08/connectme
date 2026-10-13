@@ -36,6 +36,7 @@ export class UserRepository {
     username: string;
     passwordHash: string;
     displayName?: string;
+    publicOrigin?: string;
   }): Promise<AdminUser | null> {
     try {
       return await prisma.$transaction(async (tx) => {
@@ -61,6 +62,18 @@ export class UserRepository {
       });
 
       if (update.count !== 1) return null;
+
+      // Persist the public web origin learned from the setup page in the same
+      // transaction as first-admin activation. Native clients can then create
+      // QR links to the website without a separate QR-origin environment value.
+      if (data.publicOrigin) {
+        await tx.appSetting.upsert({
+          where: { key: "public-origin" },
+          update: { value: { origin: data.publicOrigin } },
+          create: { key: "public-origin", value: { origin: data.publicOrigin } },
+        });
+      }
+
       return tx.adminUser.findUnique({ where: { id: data.userId } });
       }, { isolationLevel: "Serializable" });
     } catch (error) {
