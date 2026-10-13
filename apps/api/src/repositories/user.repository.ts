@@ -37,7 +37,8 @@ export class UserRepository {
     passwordHash: string;
     displayName?: string;
   }): Promise<AdminUser | null> {
-    return prisma.$transaction(async (tx) => {
+    try {
+      return await prisma.$transaction(async (tx) => {
       const update = await tx.adminUser.updateMany({
         where: {
           id: data.userId,
@@ -61,6 +62,18 @@ export class UserRepository {
 
       if (update.count !== 1) return null;
       return tx.adminUser.findUnique({ where: { id: data.userId } });
-    }, { isolationLevel: "Serializable" });
+      }, { isolationLevel: "Serializable" });
+    } catch (error) {
+      if (typeof error === "object" && error !== null && "code" in error) {
+        const prismaError = error as { code?: string; meta?: { target?: unknown } };
+        if (prismaError.code === "P2034") return null; // concurrent serializable transaction lost
+        if (prismaError.code === "P2002") {
+          const target = prismaError.meta?.target;
+          const targetText = Array.isArray(target) ? target.join(",") : String(target ?? "");
+          if (targetText.includes("is_initial_admin")) return null;
+        }
+      }
+      throw error;
+    }
   }
 }
