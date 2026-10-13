@@ -45,6 +45,26 @@ export function isValidMySqlUrl(value: string): boolean {
     return false;
   }
 
+  const rawSuffix = remainder.slice(authority.length);
+  const queryStart = rawSuffix.indexOf("?");
+  const fragmentStart = rawSuffix.indexOf("#");
+  const pathEndCandidates = [queryStart, fragmentStart].filter((index) => index >= 0);
+  const rawPathEnd = pathEndCandidates.length ? Math.min(...pathEndCandidates) : rawSuffix.length;
+  const rawPath = rawSuffix.slice(0, rawPathEnd);
+  if (!rawPath.startsWith("/") || !safelyEncodedComponent.test(rawPath.slice(1))) return false;
+
+  if (queryStart >= 0) {
+    const rawQueryEnd = fragmentStart >= 0 ? fragmentStart : rawSuffix.length;
+    const rawQuery = rawSuffix.slice(queryStart + 1, rawQueryEnd);
+    for (const pair of rawQuery.split("&")) {
+      if (!pair) continue;
+      const equals = pair.indexOf("=");
+      const key = equals < 0 ? pair : pair.slice(0, equals);
+      const queryValue = equals < 0 ? "" : pair.slice(equals + 1);
+      if (!safelyEncodedComponent.test(key) || !safelyEncodedComponent.test(queryValue)) return false;
+    }
+  }
+
   try {
     // Reject malformed percent escapes in every URL component. Decode only to
     // validate structure; keep the original encoded URL for Prisma.
