@@ -10,6 +10,7 @@ import {
   BootstrapSetupInput,
   BootstrapStatusDTO,
   AdminUserDTO,
+  CheckUsernameDTO,
   CreateAdminInput,
 } from "@connectme/contracts";
 import {
@@ -34,18 +35,41 @@ export class AuthService {
 
   constructor(private userRepo = new UserRepository()) {}
 
-  async getBootstrapStatus(): Promise<BootstrapStatusDTO> {
-    if (await this.userRepo.findActiveAdmin()) return { isBootstrapPending: false };
-    const pending = await this.userRepo.findPendingBootstrap();
-    if (!pending) return { isBootstrapPending: false };
+  async checkUsername(rawUsername: string): Promise<CheckUsernameDTO> {
+    const username = rawUsername.trim().toLowerCase();
+    const user = await this.userRepo.findByUsername(username);
+    if (!user) {
+      return { exists: false };
+    }
+    const needsSetup = Boolean(user.isInitialAdmin && (user.isBootstrapPending || !user.passwordHash));
     return {
-      isBootstrapPending: true,
-      hasExpired: !pending.bootstrapExpiresAt || pending.bootstrapExpiresAt < new Date(),
+      exists: true,
+      isInitialAdmin: Boolean(user.isInitialAdmin),
+      needsSetup,
+      displayName: user.displayName || undefined,
     };
   }
 
+  async getBootstrapStatus(): Promise<BootstrapStatusDTO> {
+    const pendingInitial = await this.userRepo.findPendingInitialAdmin();
+    const pendingBootstrap = await this.userRepo.findPendingBootstrap();
+
+    if (pendingInitial || pendingBootstrap) {
+      return {
+        isBootstrapPending: true,
+        hasExpired: pendingBootstrap?.bootstrapExpiresAt ? pendingBootstrap.bootstrapExpiresAt < new Date() : false,
+      };
+    }
+
+    const active = await this.userRepo.findActiveAdmin();
+    if (active) return { isBootstrapPending: false };
+    return { isBootstrapPending: false };
+  }
+
   async setupBootstrap(input: BootstrapSetupInput, publicOrigin?: string): Promise<AuthSessionResult> {
-    if (await this.userRepo.findActiveAdmin()) {
+    const pendingInitial = await this.userRepo.findPendingInitialAdmin();
+    const pendingBootstrap = await this.userRepo.findPendingBootstrap();
+    if (!pendingInitial && !pendingBootstrap) {
       throw new ForbiddenError("Administrator setup is already complete and cannot be reopened.", "BOOTSTRAP_ALREADY_COMPLETED");
     }
 
@@ -54,21 +78,56 @@ export class AuthService {
       throw new ValidationError("Username must be 3–32 characters and use only letters, numbers, dots, underscores, or hyphens.");
     }
 
-    const tokenHash = createHash("sha256").update(input.token.trim()).digest("hex");
-    const pendingUser = await this.userRepo.findByBootstrapTokenHash(tokenHash);
-    if (!pendingUser || !pendingUser.isBootstrapPending || pendingUser.isActive) {
-      throw new UnauthorizedError("Invalid, consumed, or unrecognized one-time bootstrap token.", "INVALID_BOOTSTRAP_TOKEN");
-    }
-    if (!pendingUser.bootstrapExpiresAt || pendingUser.bootstrapExpiresAt < new Date()) {
-      throw new GoneError("Bootstrap setup token has expired. An authorized operator must provision a new token.", "BOOTSTRAP_TOKEN_EXPIRED");
+    const passwordHash = await bcrypt.hash(input.password, 12);
+
+    // If a token was provided, verify and consume the token (legacy token flow)
+    if (input.token?.trim()) {
+      const tokenHash = createHash("sha256").update(input.token.trim()).digest("hex");
+      const pendingUser = await this.userRepo.findByBootstrapTokenHash(tokenHash);
+      if (!pendingUser || !pendingUser.isBootstrapPending || pendingUser.isActive) {
+        throw new UnauthorizedError("Invalid, consumed, or unrecognized one-time bootstrap token.", "INVALID_BOOTSTRAP_TOKEN");
+      }
+      if (pendingUser.bootstrapExpiresAt && pendingUser.bootstrapExpiresAt < new Date()) {
+        throw new GoneError("Bootstrap setup token has expired. An authorized operator must provision a new token.", "BOOTSTRAP_TOKEN_EXPIRED");
+      }
+
+      let activatedUser;
+      try {
+        activatedUser = await this.userRepo.completeBootstrap({
+          userId: pendingUser.id,
+          tokenHash,
+          username,
+          passwordHash,
+          displayName: input.displayName,
+          publicOrigin,
+        });
+      } catch (error) {
+        if (typeof error === "object" && error !== null && "code" in error && error.code === "P2002") {
+          throw new ValidationError("That username is unavailable. Choose another username.");
+        }
+        throw error;
+      }
+      if (!activatedUser) {
+        throw new ForbiddenError("This setup token has already been consumed or setup is no longer available.", "BOOTSTRAP_ALREADY_COMPLETED");
+      }
+      return this.createAuthSession(serializeAdminUser(activatedUser));
     }
 
-    const passwordHash = await bcrypt.hash(input.password, 12);
+    // Direct initial admin setup by username
+    const existingUser = await this.userRepo.findByUsername(username);
+    if (!existingUser) {
+      throw new UnauthorizedError("Administrator account not found.", "INVALID_ADMIN");
+    }
+    if (existingUser.isInitialAdmin !== true) {
+      throw new ForbiddenError("Only the initial administrator account can be initialized via direct setup.", "SETUP_NOT_ALLOWED");
+    }
+    if (!existingUser.isBootstrapPending && existingUser.passwordHash) {
+      throw new ForbiddenError("Administrator setup is already complete and cannot be reopened.", "BOOTSTRAP_ALREADY_COMPLETED");
+    }
+
     let activatedUser;
     try {
-      activatedUser = await this.userRepo.completeBootstrap({
-        userId: pendingUser.id,
-        tokenHash,
+      activatedUser = await this.userRepo.completeInitialAdminSetup({
         username,
         passwordHash,
         displayName: input.displayName,
@@ -80,15 +139,17 @@ export class AuthService {
       }
       throw error;
     }
+
     if (!activatedUser) {
-      throw new ForbiddenError("This setup token has already been consumed or setup is no longer available.", "BOOTSTRAP_ALREADY_COMPLETED");
+      throw new ForbiddenError("Initial administrator setup could not be completed.", "BOOTSTRAP_FAILED");
     }
+
     return this.createAuthSession(serializeAdminUser(activatedUser));
   }
 
   async login(input: AdminLoginInput): Promise<AuthSessionResult> {
     const user = await this.userRepo.findByUsername(input.username);
-    if (!user || !user.isActive || !user.passwordHash) {
+    if (!user || !user.isActive || !user.passwordHash || user.isBootstrapPending) {
       throw new UnauthorizedError("Invalid username or password.", "INVALID_CREDENTIALS");
     }
     const match = await bcrypt.compare(input.password, user.passwordHash);
@@ -105,8 +166,8 @@ export class AuthService {
 
   async createAdmin(actingAdminId: string, input: CreateAdminInput): Promise<AdminUserDTO> {
     const actor = await this.userRepo.findById(actingAdminId);
-    if (!actor?.isActive || actor.isInitialAdmin !== true) {
-      throw new ForbiddenError("Only the initial administrator can provision additional admin accounts.", "ADMIN_PROVISIONING_FORBIDDEN");
+    if (!actor?.isActive) {
+      throw new ForbiddenError("Only active administrators can provision additional admin accounts.", "ADMIN_PROVISIONING_FORBIDDEN");
     }
     const username = input.username.trim().toLowerCase();
     if (!/^[a-z0-9][a-z0-9._-]{2,31}$/.test(username)) {
@@ -117,6 +178,7 @@ export class AuthService {
         username,
         displayName: input.displayName,
         passwordHash: await bcrypt.hash(input.password, 12),
+        createdById: actingAdminId,
       });
       return serializeAdminUser(user);
     } catch (error) {
@@ -125,6 +187,11 @@ export class AuthService {
       }
       throw error;
     }
+  }
+
+  async listAdmins(): Promise<AdminUserDTO[]> {
+    const users = await this.userRepo.listAdmins();
+    return users.map((u) => serializeAdminUser(u));
   }
 
   async createWebSession(userId: string, username: string): Promise<string> {

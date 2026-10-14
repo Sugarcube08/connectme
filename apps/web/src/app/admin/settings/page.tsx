@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Settings, Save, AlertCircle, CheckCircle2 } from "lucide-react";
+import Link from "next/link";
+import { Settings, Save, AlertCircle, CheckCircle2, UserCheck, ArrowRight } from "lucide-react";
 import { apiClient } from "@/lib/api";
 
 export default function AdminSettingsPage() {
@@ -156,6 +157,23 @@ export default function AdminSettingsPage() {
           </button>
         </div>
       </form>
+
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 rounded-2xl border border-obsidian-border bg-obsidian-surface/90 p-6 shadow-sm">
+        <div>
+          <h2 className="text-sm font-semibold text-warmIvory">Administrator Team</h2>
+          <p className="mt-1 text-xs text-slate-light">
+            Manage your administrators and provision new admin users with full creator tracking.
+          </p>
+        </div>
+        <Link
+          href="/admin/team"
+          className="inline-flex items-center gap-1.5 rounded-xl border border-obsidian-border bg-obsidian-elevated px-4 py-2.5 text-xs font-semibold text-warmIvory hover:border-royalViolet transition"
+        >
+          <UserCheck className="h-4 w-4 text-metallicGold" />
+          <span>Manage Team</span>
+          <ArrowRight className="h-3.5 w-3.5" />
+        </Link>
+      </div>
     </div>
   );
 }

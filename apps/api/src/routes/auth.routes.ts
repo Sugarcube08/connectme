@@ -2,11 +2,12 @@ import { Router } from "express";
 import { AuthController } from "../controllers/auth.controller";
 import { requireAdmin } from "../middleware/auth.middleware";
 import { validateBody } from "../middleware/validate.middleware";
-import { AdminLoginSchema, BootstrapSetupSchema } from "@connectme/contracts";
+import { AdminLoginSchema, BootstrapSetupSchema, CheckUsernameSchema } from "@connectme/contracts";
 
 const router = Router();
 const controller = new AuthController();
 
+router.post("/check-username", validateBody(CheckUsernameSchema), controller.checkUsername);
 router.get("/bootstrap/status", controller.getBootstrapStatus);
 router.post("/bootstrap/setup", validateBody(BootstrapSetupSchema), controller.setupBootstrap);
 router.post("/login", validateBody(AdminLoginSchema), controller.login);

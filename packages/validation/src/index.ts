@@ -30,8 +30,12 @@ export const CreateAdminSchema = z.object({
   password: z.string().min(8).max(128).regex(/[A-Z]/).regex(/[0-9]/),
 });
 
+export const CheckUsernameSchema = z.object({
+  username: z.string().trim().min(1, "Username is required"),
+});
+
 export const BootstrapSetupSchema = z.object({
-  token: z.string().trim().min(10, "Bootstrap setup token is required"),
+  token: z.string().trim().min(10, "Bootstrap setup token is required").optional(),
   username: z.string().trim().min(3, "Username must be at least 3 characters"),
   displayName: z.string().trim().max(100).optional(),
   password: z
@@ -65,6 +69,7 @@ export const UpdateSettingsSchema = z.object({
 
 export type ContactSubmissionInput = z.infer<typeof ContactSubmissionSchema>;
 export type AdminLoginInput = z.infer<typeof AdminLoginSchema>;
+export type CheckUsernameInput = z.infer<typeof CheckUsernameSchema>;
 export type CreateAdminInput = z.infer<typeof CreateAdminSchema>;
 export type BootstrapSetupInput = z.infer<typeof BootstrapSetupSchema>;
 export type GenerateCodeInput = z.infer<typeof GenerateCodeSchema>;

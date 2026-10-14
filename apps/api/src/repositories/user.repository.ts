@@ -1,21 +1,36 @@
 import { prisma, AdminUser, type Prisma } from "@connectme/database";
 
 export class UserRepository {
-  async findByUsername(username: string): Promise<AdminUser | null> {
-    return prisma.adminUser.findUnique({ where: { username: username.toLowerCase().trim() } });
+  async findByUsername(username: string): Promise<(AdminUser & { createdBy?: AdminUser | null }) | null> {
+    return prisma.adminUser.findUnique({
+      where: { username: username.toLowerCase().trim() },
+      include: { createdBy: true },
+    });
   }
 
-  async findById(id: string): Promise<AdminUser | null> {
-    return prisma.adminUser.findUnique({ where: { id } });
+  async findById(id: string): Promise<(AdminUser & { createdBy?: AdminUser | null }) | null> {
+    return prisma.adminUser.findUnique({
+      where: { id },
+      include: { createdBy: true },
+    });
   }
 
-  async findActiveAdmin(): Promise<AdminUser | null> {
-    return prisma.adminUser.findFirst({ where: { isActive: true } });
+  async findActiveAdmin(): Promise<(AdminUser & { createdBy?: AdminUser | null }) | null> {
+    return prisma.adminUser.findFirst({
+      where: { isActive: true, isBootstrapPending: false, passwordHash: { not: null } },
+      include: { createdBy: true },
+    });
+  }
+
+  async findPendingInitialAdmin(): Promise<AdminUser | null> {
+    return prisma.adminUser.findFirst({
+      where: { isInitialAdmin: true, isBootstrapPending: true },
+    });
   }
 
   async findPendingBootstrap(): Promise<AdminUser | null> {
     return prisma.adminUser.findFirst({
-      where: { isBootstrapPending: true, isActive: false, bootstrapTokenHash: { not: null } },
+      where: { isBootstrapPending: true, bootstrapTokenHash: { not: null } },
     });
   }
 
@@ -23,11 +38,19 @@ export class UserRepository {
     return prisma.adminUser.findUnique({ where: { bootstrapTokenHash: hash } });
   }
 
+  async listAdmins(): Promise<(AdminUser & { createdBy?: AdminUser | null })[]> {
+    return prisma.adminUser.findMany({
+      include: { createdBy: true },
+      orderBy: { createdAt: "asc" },
+    });
+  }
+
   async createAdmin(data: {
     username: string;
     displayName?: string;
     passwordHash: string;
-  }): Promise<AdminUser> {
+    createdById?: string;
+  }): Promise<AdminUser & { createdBy?: AdminUser | null }> {
     return prisma.adminUser.create({
       data: {
         username: data.username.toLowerCase().trim(),
@@ -36,8 +59,65 @@ export class UserRepository {
         isActive: true,
         isBootstrapPending: false,
         isInitialAdmin: null,
+        createdById: data.createdById || null,
+      },
+      include: {
+        createdBy: true,
       },
     });
+  }
+
+  /**
+   * Atomically sets up the initial administrator when found by username.
+   */
+  async completeInitialAdminSetup(data: {
+    username: string;
+    passwordHash: string;
+    displayName?: string;
+    publicOrigin?: string;
+  }): Promise<(AdminUser & { createdBy?: AdminUser | null }) | null> {
+    try {
+      return await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+        const user = await tx.adminUser.findUnique({
+          where: { username: data.username.toLowerCase().trim() },
+        });
+        if (!user || user.isInitialAdmin !== true || !user.isBootstrapPending) {
+          return null;
+        }
+
+        const updated = await tx.adminUser.update({
+          where: { id: user.id },
+          data: {
+            passwordHash: data.passwordHash,
+            displayName: data.displayName?.trim() || user.displayName || null,
+            isActive: true,
+            isBootstrapPending: false,
+            isInitialAdmin: true,
+            bootstrapTokenHash: null,
+            bootstrapExpiresAt: null,
+          },
+          include: {
+            createdBy: true,
+          },
+        });
+
+        if (data.publicOrigin) {
+          await tx.appSetting.upsert({
+            where: { key: "public-origin" },
+            update: { value: { origin: data.publicOrigin } },
+            create: { key: "public-origin", value: { origin: data.publicOrigin } },
+          });
+        }
+
+        return updated;
+      }, { isolationLevel: "Serializable" });
+    } catch (error) {
+      if (typeof error === "object" && error !== null && "code" in error) {
+        const prismaError = error as { code?: string };
+        if (prismaError.code === "P2034") return null;
+      }
+      throw error;
+    }
   }
 
   /**
@@ -51,7 +131,7 @@ export class UserRepository {
     passwordHash: string;
     displayName?: string;
     publicOrigin?: string;
-  }): Promise<AdminUser | null> {
+  }): Promise<(AdminUser & { createdBy?: AdminUser | null }) | null> {
     try {
       return await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
         const update = await tx.adminUser.updateMany({
@@ -83,7 +163,10 @@ export class UserRepository {
             create: { key: "public-origin", value: { origin: data.publicOrigin } },
           });
         }
-        return tx.adminUser.findUnique({ where: { id: data.userId } });
+        return tx.adminUser.findUnique({
+          where: { id: data.userId },
+          include: { createdBy: true },
+        });
       }, { isolationLevel: "Serializable" });
     } catch (error) {
       if (typeof error === "object" && error !== null && "code" in error) {

@@ -11,8 +11,22 @@ export interface AdminUserDTO {
   username: string;
   displayName: string | null;
   isActive: boolean;
+  isInitialAdmin?: boolean | null;
   isBootstrapPending: boolean;
   createdAt: string;
+  createdById?: string | null;
+  createdBy?: {
+    id: string;
+    username: string;
+    displayName: string | null;
+  } | null;
+}
+
+export interface CheckUsernameDTO {
+  exists: boolean;
+  isInitialAdmin?: boolean;
+  needsSetup?: boolean;
+  displayName?: string;
 }
 
 export interface BootstrapStatusDTO {

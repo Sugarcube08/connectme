@@ -17,7 +17,8 @@ router.use(requireAdmin);
 
 router.get("/dashboard", contactsController.getDashboard);
 
-// Additional administrators are provisioned only by the initial administrator.
+// Additional administrators can be provisioned by any administrator.
+router.get("/admins", authController.listAdmins);
 router.post("/admins", validateBody(CreateAdminSchema), authController.createAdmin);
 
 router.get("/codes", codesController.list);

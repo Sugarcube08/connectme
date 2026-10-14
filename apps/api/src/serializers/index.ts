@@ -11,16 +11,28 @@ export function serializeAdminUser(user: {
   username: string;
   displayName: string | null;
   isActive: boolean;
+  isInitialAdmin?: boolean | null;
   isBootstrapPending: boolean;
   createdAt: Date;
+  createdById?: string | null;
+  createdBy?: { id: string; username: string; displayName: string | null } | null;
 }): AdminUserDTO {
   return {
     id: user.id,
     username: user.username,
     displayName: user.displayName,
     isActive: user.isActive,
+    isInitialAdmin: user.isInitialAdmin ?? null,
     isBootstrapPending: user.isBootstrapPending,
     createdAt: user.createdAt.toISOString(),
+    createdById: user.createdById ?? null,
+    createdBy: user.createdBy
+      ? {
+          id: user.createdBy.id,
+          username: user.createdBy.username,
+          displayName: user.createdBy.displayName,
+        }
+      : null,
   };
 }
 

@@ -7,6 +7,8 @@ import {
   BootstrapSetupInput,
   BootstrapStatusDTO,
   AdminUserDTO,
+  CheckUsernameDTO,
+  CreateAdminInput,
   DashboardMetrics,
   AccessCodeItem,
   GeneratedCodeDetail,
@@ -120,6 +122,7 @@ export class ConnectMeApiClient {
     try {
       let response = await this.fetchWithAuth(endpoint, options);
       const authEndpoint = endpoint === "/auth/login" ||
+        endpoint === "/auth/check-username" ||
         endpoint === "/auth/bootstrap/setup" ||
         endpoint === "/auth/refresh" ||
         endpoint === "/auth/logout";
@@ -164,6 +167,14 @@ export class ConnectMeApiClient {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
+    });
+  }
+
+  async checkUsername(username: string): Promise<ApiResponse<CheckUsernameDTO>> {
+    return this.request<CheckUsernameDTO>("/auth/check-username", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username }),
     });
   }
 
@@ -269,6 +280,18 @@ export class ConnectMeApiClient {
   async updateSettings(input: UpdateSettingsInput): Promise<ApiResponse<AppSettings>> {
     return this.request("/admin/settings", {
       method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input),
+    });
+  }
+
+  async listAdmins(): Promise<ApiResponse<AdminUserDTO[]>> {
+    return this.request<AdminUserDTO[]>("/admin/admins");
+  }
+
+  async createAdmin(input: CreateAdminInput): Promise<ApiResponse<{ user: AdminUserDTO }>> {
+    return this.request<{ user: AdminUserDTO }>("/admin/admins", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
     });
   }
 }

@@ -1,19 +1,78 @@
 "use client";
 
-import React, { useState } from "react";
-import { useRouter } from "next/navigation";
+import React, { useState, useEffect, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Lock, User, ArrowRight, AlertCircle, ShieldCheck, Sparkles } from "lucide-react";
+import { Lock, User, ArrowRight, AlertCircle, ShieldCheck, Sparkles, CheckCircle2 } from "lucide-react";
 import { apiClient } from "@/lib/api";
 
-export default function AdminLoginPage() {
+function AdminLoginContent() {
   const router = useRouter();
-  const [username, setUsername] = useState("");
+  const searchParams = useSearchParams();
+  const initialUsername = searchParams.get("username") || "";
+
+  const [step, setStep] = useState<"username" | "password">("username");
+  const [username, setUsername] = useState(initialUsername);
+  const [displayName, setDisplayName] = useState<string | null>(null);
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const handleLogin = async (e: React.FormEvent) => {
+  // If a username query param was provided, check it automatically on mount
+  useEffect(() => {
+    if (initialUsername.trim()) {
+      handleCheckUsername(initialUsername.trim());
+    }
+  }, [initialUsername]);
+
+  const handleCheckUsername = async (userToTest?: string) => {
+    const targetUsername = (userToTest || username).trim();
+    if (!targetUsername) {
+      setError("Please enter your admin username.");
+      return;
+    }
+
+    setError(null);
+    setLoading(true);
+
+    try {
+      const res = await apiClient.checkUsername(targetUsername);
+
+      if (!res.success) {
+        setError(res.error.message || "Failed to check username.");
+        return;
+      }
+
+      // If this is the initial admin and setup is pending, don't ask for password in the frontend!
+      // Directly redirect to setup account page first!
+      if (res.data.exists && res.data.needsSetup) {
+        router.push(`/setup?username=${encodeURIComponent(targetUsername)}`);
+        return;
+      }
+
+      if (!res.data.exists) {
+        setError("No administrator account found with this username.");
+        return;
+      }
+
+      // User exists and account is fully set up: prompt for password
+      if (res.data.displayName) {
+        setDisplayName(res.data.displayName);
+      }
+      setStep("password");
+    } catch {
+      setError("Network error. Could not connect to API server.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUsernameSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    handleCheckUsername();
+  };
+
+  const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setLoading(true);
@@ -25,7 +84,7 @@ export default function AdminLoginPage() {
       });
 
       if (!res.success) {
-        setError(res.error?.message || "Invalid username or password.");
+        setError(res.error.message || "Invalid username or password.");
         return;
       }
 
@@ -60,56 +119,100 @@ export default function AdminLoginPage() {
           </div>
         )}
 
-        <form onSubmit={handleLogin} className="space-y-4">
-          <div>
-            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-light">
-              Admin Username
-            </label>
-            <div className="relative">
-              <User className="absolute left-3.5 top-3.5 h-4 w-4 text-slate" />
-              <input
-                type="text"
-                required
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder="e.g. harsh"
-                className="w-full rounded-xl border border-obsidian-border bg-obsidian-elevated py-3 pl-10 pr-4 text-sm text-warmIvory placeholder-slate transition focus:border-royalViolet focus:outline-none focus:ring-1 focus:ring-royalViolet"
-              />
+        {step === "username" ? (
+          <form onSubmit={handleUsernameSubmit} className="space-y-4">
+            <div>
+              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-light">
+                Admin Username
+              </label>
+              <div className="relative">
+                <User className="absolute left-3.5 top-3.5 h-4 w-4 text-slate" />
+                <input
+                  type="text"
+                  required
+                  autoFocus
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder="e.g. harsh0802"
+                  className="w-full rounded-xl border border-obsidian-border bg-obsidian-elevated py-3 pl-10 pr-4 text-sm text-warmIvory placeholder-slate transition focus:border-royalViolet focus:outline-none focus:ring-1 focus:ring-royalViolet"
+                />
+              </div>
             </div>
-          </div>
 
-          <div>
-            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-light">
-              Password
-            </label>
-            <div className="relative">
-              <Lock className="absolute left-3.5 top-3.5 h-4 w-4 text-slate" />
-              <input
-                type="password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••••••"
-                className="w-full rounded-xl border border-obsidian-border bg-obsidian-elevated py-3 pl-10 pr-4 text-sm text-warmIvory placeholder-slate transition focus:border-royalViolet focus:outline-none focus:ring-1 focus:ring-royalViolet"
-              />
+            <button
+              type="submit"
+              disabled={loading}
+              className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-royalViolet py-3.5 text-sm font-semibold text-white shadow-royal transition hover:bg-royalViolet-hover disabled:opacity-50"
+            >
+              {loading ? (
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+              ) : (
+                <>
+                  <span>Continue</span>
+                  <ArrowRight className="h-4 w-4" />
+                </>
+              )}
+            </button>
+          </form>
+        ) : (
+          <form onSubmit={handleLoginSubmit} className="space-y-4">
+            <div className="mb-2 flex items-center justify-between rounded-xl border border-obsidian-border bg-obsidian-elevated px-3.5 py-2.5">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-royalViolet/20 text-xs font-bold text-royalViolet-hover">
+                  {username.charAt(0).toUpperCase()}
+                </div>
+                <div>
+                  <div className="text-xs font-semibold text-warmIvory">{username}</div>
+                  {displayName && <div className="text-[11px] text-slate-light">{displayName}</div>}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setStep("username");
+                  setPassword("");
+                  setError(null);
+                }}
+                className="text-xs text-metallicGold hover:underline"
+              >
+                Change
+              </button>
             </div>
-          </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-royalViolet py-3.5 text-sm font-semibold text-white shadow-royal transition hover:bg-royalViolet-hover disabled:opacity-50"
-          >
-            {loading ? (
-              <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-            ) : (
-              <>
-                <span>Sign In</span>
-                <ArrowRight className="h-4 w-4" />
-              </>
-            )}
-          </button>
-        </form>
+            <div>
+              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-light">
+                Password
+              </label>
+              <div className="relative">
+                <Lock className="absolute left-3.5 top-3.5 h-4 w-4 text-slate" />
+                <input
+                  type="password"
+                  required
+                  autoFocus
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••••••"
+                  className="w-full rounded-xl border border-obsidian-border bg-obsidian-elevated py-3 pl-10 pr-4 text-sm text-warmIvory placeholder-slate transition focus:border-royalViolet focus:outline-none focus:ring-1 focus:ring-royalViolet"
+                />
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-royalViolet py-3.5 text-sm font-semibold text-white shadow-royal transition hover:bg-royalViolet-hover disabled:opacity-50"
+            >
+              {loading ? (
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+              ) : (
+                <>
+                  <span>Sign In</span>
+                  <ArrowRight className="h-4 w-4" />
+                </>
+              )}
+            </button>
+          </form>
+        )}
 
         <div className="mt-6 border-t border-obsidian-border pt-4 text-center">
           <Link
@@ -127,5 +230,19 @@ export default function AdminLoginPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function AdminLoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-royalViolet border-t-transparent" />
+        </div>
+      }
+    >
+      <AdminLoginContent />
+    </Suspense>
   );
 }

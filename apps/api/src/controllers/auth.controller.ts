@@ -79,10 +79,23 @@ export class AuthController {
     }
   };
 
+  checkUsername = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      return res.status(200).json({ success: true, data: await this.authService.checkUsername(req.body.username) });
+    } catch (err) { next(err); }
+  };
+
   createAdmin = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const admin = await this.authService.createAdmin(req.adminUser!.id, req.body);
       return res.status(201).json({ success: true, data: { user: admin } });
+    } catch (err) { next(err); }
+  };
+
+  listAdmins = async (_req: Request, res: Response, next: NextFunction) => {
+    try {
+      const admins = await this.authService.listAdmins();
+      return res.status(200).json({ success: true, data: admins });
     } catch (err) { next(err); }
   };
 
