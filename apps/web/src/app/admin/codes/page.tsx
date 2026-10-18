@@ -14,9 +14,11 @@ import {
   Copy,
   Check,
   Printer,
+  Archive,
 } from "lucide-react";
 import { AccessCodeItem, GeneratedCodeDetail, CodeStatus } from "@connectme/contracts";
 import { apiClient } from "@/lib/api";
+import { createZipBlob, dataUrlToUint8Array, downloadBlob } from "@/lib/zip";
 
 export default function AdminCodesPage() {
   const [codes, setCodes] = useState<AccessCodeItem[]>([]);
@@ -36,6 +38,7 @@ export default function AdminCodesPage() {
   // Newly Generated Codes Display Modal
   const [generatedResults, setGeneratedResults] = useState<GeneratedCodeDetail[] | null>(null);
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
+  const [zipping, setZipping] = useState(false);
 
   const fetchCodes = useCallback(async () => {
     try {
@@ -120,6 +123,38 @@ export default function AdminCodesPage() {
     a.href = dataUrl;
     a.download = `connectme-qr-${(label || "code").toLowerCase().replace(/\s+/g, "-")}.png`;
     a.click();
+  };
+
+  const downloadAllQrZip = () => {
+    if (!generatedResults || generatedResults.length === 0) return;
+    try {
+      setZipping(true);
+      const files = generatedResults.map((item, index) => {
+        const safeLabel = (item.label || "code")
+          .toLowerCase()
+          .replace(/[^a-z0-9_-]/g, "-")
+          .replace(/-+/g, "-");
+        const num = String(index + 1).padStart(2, "0");
+        const filename = `qr-${num}-${safeLabel}.png`;
+        return {
+          name: filename,
+          data: dataUrlToUint8Array(item.qrDataUrl),
+        };
+      });
+
+      const zipBlob = createZipBlob(files);
+      const batchLabel = generatedResults[0]?.label
+        ? generatedResults[0].label.toLowerCase().replace(/[^a-z0-9_-]/g, "-")
+        : "codes";
+      downloadBlob(
+        zipBlob,
+        `connectme-qr-${batchLabel}-${generatedResults.length}-codes.zip`
+      );
+    } catch {
+      alert("Failed to create ZIP archive.");
+    } finally {
+      setZipping(false);
+    }
   };
 
   const statusBadge = (status: CodeStatus) => {
@@ -404,7 +439,19 @@ export default function AdminCodesPage() {
                   Download QR assets now. For security, raw tokens are only shown during creation.
                 </p>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                {generatedResults.length > 1 && (
+                  <button
+                    type="button"
+                    disabled={zipping}
+                    onClick={downloadAllQrZip}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-royalViolet bg-royalViolet px-3 py-1.5 text-xs font-semibold text-white shadow-royal hover:bg-royalViolet-hover transition disabled:opacity-50"
+                    title="Download all generated QR code PNGs as a single ZIP archive"
+                  >
+                    <Archive className="h-3.5 w-3.5" />
+                    <span>{zipping ? "Creating ZIP..." : `Download ZIP (${generatedResults.length} PNGs)`}</span>
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => window.print()}
@@ -487,7 +534,20 @@ export default function AdminCodesPage() {
               ))}
             </div>
 
-            <div className="mt-5 border-t border-obsidian-border pt-4 text-right">
+            <div className="mt-5 flex items-center justify-between border-t border-obsidian-border pt-4">
+              <div>
+                {generatedResults.length > 1 && (
+                  <button
+                    type="button"
+                    disabled={zipping}
+                    onClick={downloadAllQrZip}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-royalViolet px-4 py-2 text-xs font-semibold text-white hover:bg-royalViolet-hover transition disabled:opacity-50 shadow-royal"
+                  >
+                    <Archive className="h-3.5 w-3.5" />
+                    <span>{zipping ? "Creating ZIP..." : `Download All ${generatedResults.length} QR Codes (ZIP)`}</span>
+                  </button>
+                )}
+              </div>
               <button
                 onClick={() => setGeneratedResults(null)}
                 className="rounded-xl bg-obsidian-elevated px-5 py-2 text-xs font-semibold text-warmIvory hover:bg-obsidian-border"

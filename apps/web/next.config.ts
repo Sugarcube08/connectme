@@ -30,7 +30,7 @@ const nextConfig: NextConfig = {
   transpilePackages: ["@connectme/api-client", "@connectme/contracts", "@connectme/design-tokens", "@connectme/validation"],
   experimental: {
     serverActions: {
-      bodySizeLimit: "4mb",
+      bodySizeLimit: "10mb",
     },
   },
 };

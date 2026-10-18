@@ -66,6 +66,7 @@ export interface ContactItem {
   hasImage: boolean;
   imageMime: string | null;
   imageSize: number | null;
+  imageUrl?: string | null;
   submittedAt: string;
   followUpStatus: FollowUpStatus;
 }

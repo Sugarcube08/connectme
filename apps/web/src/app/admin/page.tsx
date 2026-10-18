@@ -199,8 +199,31 @@ export default function AdminDashboardPage() {
                 {metrics.recentSubmissions.map((c) => (
                   <tr key={c.id} className="transition hover:bg-obsidian-elevated/40">
                     <td className="py-3.5 pr-4">
-                      <div className="font-semibold text-warmIvory">{c.fullName}</div>
-                      {c.role && <div className="text-[11px] text-slate">{c.role}</div>}
+                      <div className="flex items-center gap-2.5">
+                        {c.hasImage ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={c.imageUrl || `/api/v1/admin/contacts/${c.id}/image`}
+                            alt={c.fullName}
+                            className="h-8 w-8 rounded-full object-cover border border-royalViolet shrink-0"
+                            onError={(e) => {
+                              e.currentTarget.style.display = "none";
+                              const fallback = e.currentTarget.nextElementSibling as HTMLElement;
+                              if (fallback) fallback.style.display = "flex";
+                            }}
+                          />
+                        ) : null}
+                        <div
+                          style={{ display: c.hasImage ? "none" : "flex" }}
+                          className="h-8 w-8 items-center justify-center rounded-full bg-deepIndigo text-warmIvory font-bold text-xs shrink-0"
+                        >
+                          {c.fullName.slice(0, 2).toUpperCase()}
+                        </div>
+                        <div>
+                          <div className="font-semibold text-warmIvory">{c.fullName}</div>
+                          {c.role && <div className="text-[11px] text-slate">{c.role}</div>}
+                        </div>
+                      </div>
                     </td>
                     <td className="py-3.5 pr-4 text-slate-light">{c.organization || "—"}</td>
                     <td className="py-3.5 pr-4 font-mono text-warmIvory/80">{c.phoneNumber}</td>

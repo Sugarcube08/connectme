@@ -93,6 +93,7 @@ export function serializeContact(contact: {
     hasImage: !!contact.image,
     imageMime: contact.image?.mime || null,
     imageSize: contact.image?.size || null,
+    imageUrl: contact.image ? `/api/v1/admin/contacts/${contact.id}/image` : null,
     submittedAt: contact.submittedAt.toISOString(),
     followUpStatus: contact.followUpStatus as FollowUpStatus,
   };

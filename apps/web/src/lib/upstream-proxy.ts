@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 
 const FORWARDED_RESPONSE_HEADERS = [
   "content-type",
+  "content-length",
   "content-disposition",
   "cache-control",
   "etag",
@@ -117,7 +118,8 @@ export async function proxyToApi(request: NextRequest, apiPath: string): Promise
     if (cookie) responseHeaders.set("set-cookie", cookie);
   }
 
-  return new Response(upstream.body, {
+  const body = await upstream.arrayBuffer();
+  return new Response(body, {
     status: upstream.status,
     statusText: upstream.statusText,
     headers: responseHeaders,

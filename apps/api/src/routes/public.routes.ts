@@ -1,9 +1,10 @@
 import { Router } from "express";
 import multer from "multer";
 import { PublicController } from "../controllers/public.controller";
+import { config } from "../config/env";
 
 const upload = multer({
-  limits: { fileSize: 2 * 1024 * 1024 }, // 2 MB limit
+  limits: { fileSize: config.MAX_IMAGE_SIZE_BYTES },
   storage: multer.memoryStorage(),
 });
 

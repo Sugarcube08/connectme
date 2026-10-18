@@ -41,7 +41,7 @@ const EnvSchema = z.object({
   SESSION_SECRET: z.string().min(32, "SESSION_SECRET must be at least 32 characters."),
   JWT_SECRET: z.string().min(32, "JWT_SECRET must be at least 32 characters."),
   ACCESS_CODE_PEPPER: z.string().min(32, "ACCESS_CODE_PEPPER must be at least 32 characters."),
-  MAX_IMAGE_SIZE_BYTES: z.coerce.number().int().positive().default(2097152),
+  MAX_IMAGE_SIZE_BYTES: z.coerce.number().int().positive().default(5242880),
   MAX_BATCH_CODE_COUNT: z.coerce.number().int().min(1).max(100).default(100),
 });
 

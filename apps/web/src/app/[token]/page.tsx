@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, use } from "react";
+import React, { useState, useEffect, use, useRef } from "react";
 import {
   CheckCircle2,
   AlertCircle,
@@ -10,6 +10,9 @@ import {
   Send,
   Lock,
   Sparkles,
+  SwitchCamera,
+  RotateCcw,
+  Check,
 } from "lucide-react";
 import { apiClient } from "@/lib/api";
 
@@ -41,6 +44,17 @@ export default function PublicContactPage({ params }: PublicPageProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [imageError, setImageError] = useState<string | null>(null);
+  const [compressing, setCompressing] = useState(false);
+
+  // Live Camera states & refs
+  const [isCameraActive, setIsCameraActive] = useState(false);
+  const [cameraFacing, setCameraFacing] = useState<"user" | "environment">("user");
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const [capturedPhotoUrl, setCapturedPhotoUrl] = useState<string | null>(null);
+  const [capturedBlob, setCapturedBlob] = useState<Blob | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Submission state
   const [submitting, setSubmitting] = useState(false);
@@ -77,7 +91,100 @@ export default function PublicContactPage({ params }: PublicPageProps) {
     checkToken();
   }, [token]);
 
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
+
+  const compressImageToLimit = async (file: File, maxBytes = MAX_IMAGE_SIZE_BYTES): Promise<File> => {
+    if (file.size <= maxBytes) return file;
+
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      const objectUrl = URL.createObjectURL(file);
+
+      img.onload = async () => {
+        URL.revokeObjectURL(objectUrl);
+        try {
+          let width = img.naturalWidth || img.width;
+          let height = img.naturalHeight || img.height;
+
+          // Cap extreme camera resolutions (e.g. 48MP/108MP) to 2560px max dimension
+          // which preserves crisp retina clarity while drastically reducing memory/filesize
+          const maxDimension = 2560;
+          if (width > maxDimension || height > maxDimension) {
+            if (width > height) {
+              height = Math.round((height * maxDimension) / width);
+              width = maxDimension;
+            } else {
+              width = Math.round((width * maxDimension) / height);
+              height = maxDimension;
+            }
+          }
+
+          const canvas = document.createElement("canvas");
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) {
+            resolve(file);
+            return;
+          }
+
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = "high";
+          ctx.drawImage(img, 0, 0, width, height);
+
+          // Output WebP if supported/uploaded, else high-quality JPEG
+          const outputMime = file.type === "image/webp" ? "image/webp" : "image/jpeg";
+          let quality = 0.92;
+
+          const toBlobAsync = (q: number): Promise<Blob | null> =>
+            new Promise((res) => canvas.toBlob(res, outputMime, q));
+
+          let blob = await toBlobAsync(quality);
+
+          // If still above limit, gradually reduce compression quality while keeping visual fidelity
+          while (blob && blob.size > maxBytes && quality > 0.65) {
+            quality -= 0.07;
+            blob = await toBlobAsync(quality);
+          }
+
+          // If still over 5MB, scale down canvas resolution progressively
+          while (blob && blob.size > maxBytes && (canvas.width > 1200 || canvas.height > 1200)) {
+            canvas.width = Math.round(canvas.width * 0.85);
+            canvas.height = Math.round(canvas.height * 0.85);
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = "high";
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            blob = await toBlobAsync(quality);
+          }
+
+          if (!blob) {
+            resolve(file);
+            return;
+          }
+
+          const extension = outputMime === "image/webp" ? ".webp" : ".jpg";
+          const newFileName = file.name.replace(/\.[^.]+$/, "") + extension;
+          const compressedFile = new File([blob], newFileName, {
+            type: outputMime,
+            lastModified: Date.now(),
+          });
+
+          resolve(compressedFile);
+        } catch (err) {
+          reject(err);
+        }
+      };
+
+      img.onerror = () => {
+        URL.revokeObjectURL(objectUrl);
+        reject(new Error("Failed to load image for compression."));
+      };
+
+      img.src = objectUrl;
+    });
+  };
+
+  const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     setImageError(null);
     const file = e.target.files?.[0];
     if (!file) return;
@@ -87,14 +194,27 @@ export default function PublicContactPage({ params }: PublicPageProps) {
       return;
     }
 
-    if (file.size > 2 * 1024 * 1024) {
-      setImageError("Image must be smaller than 2 MB.");
-      return;
-    }
+    try {
+      let processedFile = file;
+      if (file.size > MAX_IMAGE_SIZE_BYTES) {
+        setCompressing(true);
+        processedFile = await compressImageToLimit(file, MAX_IMAGE_SIZE_BYTES);
+      }
 
-    setSelectedFile(file);
-    const objectUrl = URL.createObjectURL(file);
-    setPreviewUrl(objectUrl);
+      if (processedFile.size > MAX_IMAGE_SIZE_BYTES) {
+        setImageError("Image could not be compressed below 5 MB. Please select a different photo.");
+        return;
+      }
+
+      setSelectedFile(processedFile);
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+      const objectUrl = URL.createObjectURL(processedFile);
+      setPreviewUrl(objectUrl);
+    } catch {
+      setImageError("Could not process this image. Please try another photo.");
+    } finally {
+      setCompressing(false);
+    }
   };
 
   const handleRemoveImage = () => {
@@ -104,6 +224,152 @@ export default function PublicContactPage({ params }: PublicPageProps) {
       setPreviewUrl(null);
     }
     setImageError(null);
+  };
+
+  // Camera handling functions
+  const stopCameraStream = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      stopCameraStream();
+    };
+  }, []);
+
+  const startCamera = async (facing: "user" | "environment" = cameraFacing) => {
+    setCameraError(null);
+    if (capturedPhotoUrl) {
+      URL.revokeObjectURL(capturedPhotoUrl);
+      setCapturedPhotoUrl(null);
+    }
+    setCapturedBlob(null);
+
+    stopCameraStream();
+
+    if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
+      setCameraError(
+        "Direct camera streaming is not supported on this browser or requires HTTPS. You can choose a photo from your files or use native camera capture."
+      );
+      setIsCameraActive(true);
+      return;
+    }
+
+    try {
+      setIsCameraActive(true);
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: facing,
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
+        },
+        audio: false,
+      });
+
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play().catch(() => {});
+      }
+    } catch (err: any) {
+      console.error("Camera access error:", err);
+      stopCameraStream();
+      if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
+        setCameraError(
+          "Camera access permission was denied. Please allow camera permissions in your browser or select an existing photo."
+        );
+      } else {
+        setCameraError("Could not access camera. Please select a photo from your device.");
+      }
+    }
+  };
+
+  const toggleCameraFacing = async () => {
+    const nextFacing = cameraFacing === "user" ? "environment" : "user";
+    setCameraFacing(nextFacing);
+    await startCamera(nextFacing);
+  };
+
+  const snapPhoto = () => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    const width = video.videoWidth || 640;
+    const height = video.videoHeight || 480;
+
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    // Front-facing camera: mirror horizontally so selfie matches what user sees
+    if (cameraFacing === "user") {
+      ctx.translate(width, 0);
+      ctx.scale(-1, 1);
+    }
+
+    ctx.drawImage(video, 0, 0, width, height);
+
+    canvas.toBlob(
+      (blob) => {
+        if (!blob) return;
+        if (capturedPhotoUrl) URL.revokeObjectURL(capturedPhotoUrl);
+        const preview = URL.createObjectURL(blob);
+        setCapturedPhotoUrl(preview);
+        setCapturedBlob(blob);
+      },
+      "image/jpeg",
+      0.95
+    );
+  };
+
+  const retakePhoto = () => {
+    if (capturedPhotoUrl) {
+      URL.revokeObjectURL(capturedPhotoUrl);
+      setCapturedPhotoUrl(null);
+    }
+    setCapturedBlob(null);
+  };
+
+  const confirmCapturedPhoto = async () => {
+    if (!capturedBlob) return;
+    try {
+      const capturedFile = new File([capturedBlob], `camera-photo-${Date.now()}.jpg`, {
+        type: "image/jpeg",
+        lastModified: Date.now(),
+      });
+
+      let processed = capturedFile;
+      if (capturedFile.size > MAX_IMAGE_SIZE_BYTES) {
+        setCompressing(true);
+        processed = await compressImageToLimit(capturedFile, MAX_IMAGE_SIZE_BYTES);
+      }
+
+      setSelectedFile(processed);
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+      setPreviewUrl(URL.createObjectURL(processed));
+      setImageError(null);
+      closeCamera();
+    } catch {
+      setImageError("Failed to process captured photo.");
+    } finally {
+      setCompressing(false);
+    }
+  };
+
+  const closeCamera = () => {
+    stopCameraStream();
+    if (capturedPhotoUrl) {
+      URL.revokeObjectURL(capturedPhotoUrl);
+      setCapturedPhotoUrl(null);
+    }
+    setCapturedBlob(null);
+    setIsCameraActive(false);
+    setCameraError(null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -366,7 +632,110 @@ export default function PublicContactPage({ params }: PublicPageProps) {
                 </div>
               </div>
 
-              {previewUrl ? (
+              {isCameraActive ? (
+                <div className="mt-3 overflow-hidden rounded-2xl border border-royalViolet bg-black p-3 shadow-royal">
+                  <div className="relative aspect-[4/3] w-full overflow-hidden rounded-xl bg-obsidian-surface flex items-center justify-center">
+                    {capturedPhotoUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={capturedPhotoUrl}
+                        alt="Captured frame"
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <>
+                        <video
+                          ref={videoRef}
+                          autoPlay
+                          playsInline
+                          muted
+                          className={`h-full w-full object-cover ${cameraFacing === "user" ? "-scale-x-100" : ""}`}
+                        />
+                        <div className="pointer-events-none absolute inset-4 rounded-xl border border-white/20" />
+                      </>
+                    )}
+
+                    {cameraError && (
+                      <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/85 p-4 text-center">
+                        <AlertCircle className="mb-2 h-6 w-6 text-red-400" />
+                        <p className="text-xs text-red-200">{cameraError}</p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            closeCamera();
+                            fileInputRef.current?.click();
+                          }}
+                          className="mt-3 rounded-lg bg-royalViolet px-3 py-1.5 text-xs font-semibold text-white hover:bg-royalViolet-hover"
+                        >
+                          Choose from files instead
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Camera Controls */}
+                  <div className="mt-3 flex items-center justify-between px-2">
+                    {capturedPhotoUrl ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={retakePhoto}
+                          className="inline-flex items-center gap-1.5 rounded-xl border border-obsidian-border bg-obsidian-elevated px-3.5 py-2 text-xs font-semibold text-warmIvory hover:bg-obsidian-border transition"
+                        >
+                          <RotateCcw className="h-3.5 w-3.5" />
+                          <span>Retake</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={confirmCapturedPhoto}
+                          className="inline-flex items-center gap-1.5 rounded-xl bg-royalViolet px-4 py-2 text-xs font-semibold text-white shadow-royal hover:bg-royalViolet-hover transition"
+                        >
+                          <Check className="h-3.5 w-3.5" />
+                          <span>Use Photo</span>
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          onClick={toggleCameraFacing}
+                          className="inline-flex items-center gap-1.5 rounded-xl border border-obsidian-border bg-obsidian-elevated px-3 py-2 text-xs font-semibold text-warmIvory hover:bg-obsidian-border transition"
+                          title="Switch front/back camera"
+                        >
+                          <SwitchCamera className="h-4 w-4" />
+                          <span className="hidden sm:inline">Flip</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={snapPhoto}
+                          className="flex h-12 w-12 items-center justify-center rounded-full border-4 border-royalViolet bg-white shadow-royal hover:scale-105 active:scale-95 transition"
+                          title="Snap Photo"
+                        >
+                          <div className="h-8 w-8 rounded-full bg-royalViolet" />
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={closeCamera}
+                          className="inline-flex items-center gap-1 rounded-xl border border-obsidian-border bg-obsidian-elevated px-3 py-2 text-xs font-semibold text-slate-light hover:text-warmIvory transition"
+                        >
+                          <X className="h-4 w-4" />
+                          <span>Cancel</span>
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              ) : compressing ? (
+                <div className="mt-3 flex items-center gap-3 rounded-xl border border-obsidian-border bg-obsidian-elevated/40 p-4">
+                  <div className="h-5 w-5 animate-spin rounded-full border-2 border-royalViolet border-t-transparent" />
+                  <div className="text-xs text-warmIvory">
+                    Optimizing high-resolution photo...
+                    <div className="text-[10px] text-slate-light">Compressing to fit 5 MB while preserving quality</div>
+                  </div>
+                </div>
+              ) : previewUrl ? (
                 <div className="mt-3 flex items-center gap-4">
                   <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-xl border-2 border-royalViolet">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -383,21 +752,44 @@ export default function PublicContactPage({ params }: PublicPageProps) {
                     </button>
                     <p className="mt-1 text-[11px] text-slate-light">
                       Picture selected ({selectedFile?.name})
+                      {selectedFile?.size ? ` • ${(selectedFile.size / (1024 * 1024)).toFixed(2)} MB` : ""}
                     </p>
                   </div>
                 </div>
               ) : (
-                <label className="mt-2 flex cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-obsidian-border bg-obsidian-elevated/40 p-4 transition hover:border-royalViolet/60">
-                  <UploadCloud className="mb-1 h-6 w-6 text-slate" />
-                  <span className="text-xs font-medium text-warmIvory">Choose photo</span>
-                  <span className="text-[10px] text-slate">JPEG, PNG, WebP (up to 2MB)</span>
+                <div className="mt-2 space-y-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() => startCamera("user")}
+                      className="flex items-center justify-center gap-2 rounded-xl border border-royalViolet/40 bg-royalViolet/10 p-3.5 text-xs font-semibold text-royalViolet-hover transition hover:bg-royalViolet/20 shadow-sm"
+                    >
+                      <Camera className="h-4 w-4" />
+                      <span>Take Photo (Camera)</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="flex items-center justify-center gap-2 rounded-xl border border-obsidian-border bg-obsidian-elevated/40 p-3.5 text-xs font-semibold text-warmIvory transition hover:border-royalViolet/60"
+                    >
+                      <UploadCloud className="h-4 w-4 text-slate" />
+                      <span>Upload from Device</span>
+                    </button>
+                  </div>
+
                   <input
+                    ref={fileInputRef}
                     type="file"
                     accept="image/jpeg,image/png,image/webp"
                     className="hidden"
                     onChange={handleImageChange}
                   />
-                </label>
+
+                  <p className="text-center text-[10px] text-slate">
+                    JPEG, PNG, WebP (up to 5MB, auto-compressed if larger)
+                  </p>
+                </div>
               )}
 
               {imageError && <p className="mt-2 text-xs text-red-400">{imageError}</p>}

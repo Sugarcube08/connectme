@@ -14,6 +14,8 @@ import {
   X,
   MessageSquare,
   Sparkles,
+  ZoomIn,
+  Eye,
 } from "lucide-react";
 import { ContactItem, FollowUpStatus } from "@connectme/contracts";
 import { apiClient } from "@/lib/api";
@@ -30,6 +32,9 @@ export default function AdminContactsPage() {
   const [selectedContact, setSelectedContact] = useState<ContactItem | null>(null);
   const [notesUpdating, setNotesUpdating] = useState(false);
   const [editNotes, setEditNotes] = useState("");
+
+  // Photo Lightbox State
+  const [lightboxContact, setLightboxContact] = useState<ContactItem | null>(null);
 
   const fetchContacts = useCallback(async () => {
     try {
@@ -210,17 +215,39 @@ export default function AdminContactsPage() {
                         {c.hasImage ? (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img
-                            src={`/api/v1/admin/contacts/${c.id}/image`}
+                            src={c.imageUrl || `/api/v1/admin/contacts/${c.id}/image`}
                             alt={c.fullName}
-                            className="h-9 w-9 rounded-full object-cover border border-royalViolet"
+                            onClick={() => setLightboxContact(c)}
+                            title="Click to enlarge photo"
+                            className="h-10 w-10 cursor-pointer rounded-full object-cover border-2 border-royalViolet transition hover:scale-110 hover:ring-2 hover:ring-royalViolet-hover"
+                            onError={(e) => {
+                              e.currentTarget.style.display = "none";
+                              const fallback = e.currentTarget.nextElementSibling as HTMLElement;
+                              if (fallback) fallback.style.display = "flex";
+                            }}
                           />
-                        ) : (
-                          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-deepIndigo text-warmIvory font-bold text-xs">
-                            {c.fullName.slice(0, 2).toUpperCase()}
-                          </div>
-                        )}
+                        ) : null}
+                        <div
+                          style={{ display: c.hasImage ? "none" : "flex" }}
+                          className="h-10 w-10 items-center justify-center rounded-full bg-deepIndigo text-warmIvory font-bold text-xs"
+                        >
+                          {c.fullName.slice(0, 2).toUpperCase()}
+                        </div>
                         <div>
-                          <div className="font-semibold text-warmIvory">{c.fullName}</div>
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-semibold text-warmIvory">{c.fullName}</span>
+                            {c.hasImage && (
+                              <button
+                                type="button"
+                                onClick={() => setLightboxContact(c)}
+                                className="inline-flex items-center gap-1 rounded bg-royalViolet/20 px-1.5 py-0.5 text-[10px] font-semibold text-royalViolet-hover hover:bg-royalViolet/35 transition"
+                                title="View uploaded profile photo"
+                              >
+                                <Eye className="h-2.5 w-2.5" />
+                                <span>Photo</span>
+                              </button>
+                            )}
+                          </div>
                           <div className="text-[10px] text-slate">
                             {new Date(c.submittedAt).toLocaleDateString()}
                           </div>
@@ -325,10 +352,25 @@ export default function AdminContactsPage() {
                   <div className="relative">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
-                      src={`/api/v1/admin/contacts/${selectedContact.id}/image`}
+                      src={selectedContact.imageUrl || `/api/v1/admin/contacts/${selectedContact.id}/image`}
                       alt={selectedContact.fullName}
-                      className="h-20 w-20 rounded-xl object-cover border-2 border-royalViolet"
+                      className="h-20 w-20 rounded-xl object-cover border-2 border-royalViolet cursor-pointer transition hover:opacity-90"
+                      onClick={() => {
+                        window.open(selectedContact.imageUrl || `/api/v1/admin/contacts/${selectedContact.id}/image`, "_blank");
+                      }}
+                      title="Click to view full photo in new tab"
+                      onError={(e) => {
+                        e.currentTarget.style.display = "none";
+                        const fallback = e.currentTarget.nextElementSibling as HTMLElement;
+                        if (fallback) fallback.style.display = "flex";
+                      }}
                     />
+                    <div
+                      style={{ display: "none" }}
+                      className="h-20 w-20 items-center justify-center rounded-xl bg-deepIndigo text-warmIvory font-bold text-xl"
+                    >
+                      {selectedContact.fullName.slice(0, 2).toUpperCase()}
+                    </div>
                     <button
                       onClick={() => handleDeleteImage(selectedContact.id)}
                       title="Delete stored photo"
@@ -359,6 +401,16 @@ export default function AdminContactsPage() {
                   <div className="mt-1 text-[11px] text-metallicGold">
                     Card Source: {selectedContact.accessCodeLabel || "General"}
                   </div>
+                  {selectedContact.hasImage && (
+                    <button
+                      type="button"
+                      onClick={() => setLightboxContact(selectedContact)}
+                      className="mt-1 inline-flex items-center gap-1 text-[11px] text-royalViolet-hover hover:underline"
+                    >
+                      <ZoomIn className="h-3 w-3" />
+                      <span>Enlarge & Download Photo</span>
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -378,16 +430,21 @@ export default function AdminContactsPage() {
                   </div>
                 )}
 
-                {selectedContact.profileUrl && (
+                {selectedContact.profileUrl ? (
                   <a
                     href={selectedContact.profileUrl}
                     target="_blank"
                     rel="noreferrer"
                     className="flex items-center gap-2.5 rounded-lg border border-obsidian-border bg-obsidian-elevated/20 p-2.5 text-royalViolet-hover hover:underline"
                   >
-                    <ExternalLink className="h-4 w-4" />
-                    <span className="truncate">{selectedContact.profileUrl}</span>
+                    <ExternalLink className="h-4 w-4 shrink-0" />
+                    <span className="truncate">Social / Portfolio: {selectedContact.profileUrl}</span>
                   </a>
+                ) : (
+                  <div className="flex items-center gap-2.5 rounded-lg border border-obsidian-border bg-obsidian-elevated/20 p-2.5 text-slate">
+                    <ExternalLink className="h-4 w-4 shrink-0 text-slate" />
+                    <span className="italic text-[11px]">No social / portfolio link provided</span>
+                  </div>
                 )}
               </div>
 
@@ -440,6 +497,68 @@ export default function AdminContactsPage() {
               >
                 Close
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Profile Photo Lightbox Modal */}
+      {lightboxContact && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4 backdrop-blur-md"
+          onClick={() => setLightboxContact(null)}
+        >
+          <div
+            className="relative w-full max-w-lg rounded-2xl border border-obsidian-border bg-obsidian-surface p-6 shadow-royal"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-4 flex items-center justify-between border-b border-obsidian-border pb-3">
+              <div>
+                <h3 className="text-base font-bold text-warmIvory">
+                  {lightboxContact.fullName}
+                </h3>
+                <p className="text-xs text-slate-light">
+                  {lightboxContact.organization || lightboxContact.role || "Contact Photo"} &bull; {new Date(lightboxContact.submittedAt).toLocaleDateString()}
+                </p>
+              </div>
+              <button
+                onClick={() => setLightboxContact(null)}
+                className="rounded-lg p-1.5 text-slate hover:bg-obsidian-elevated hover:text-warmIvory"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="flex justify-center bg-black/40 rounded-xl p-3 border border-obsidian-border overflow-hidden">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={lightboxContact.imageUrl || `/api/v1/admin/contacts/${lightboxContact.id}/image`}
+                alt={lightboxContact.fullName}
+                className="max-h-[60vh] w-auto max-w-full rounded-lg object-contain shadow-royal"
+              />
+            </div>
+
+            <div className="mt-4 flex items-center justify-between text-xs text-slate">
+              <span>
+                {lightboxContact.imageMime || "image/webp"}
+                {lightboxContact.imageSize ? ` • ${(lightboxContact.imageSize / 1024).toFixed(1)} KB` : ""}
+              </span>
+              <div className="flex items-center gap-2">
+                <a
+                  href={lightboxContact.imageUrl || `/api/v1/admin/contacts/${lightboxContact.id}/image`}
+                  download={`${lightboxContact.fullName.toLowerCase().replace(/\s+/g, "-")}-photo.webp`}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-royalViolet bg-royalViolet/20 px-3 py-1.5 font-semibold text-royalViolet-hover hover:bg-royalViolet/30 transition"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  <span>Download Photo</span>
+                </a>
+                <button
+                  onClick={() => setLightboxContact(null)}
+                  className="rounded-lg bg-obsidian-elevated px-4 py-1.5 font-semibold text-warmIvory hover:bg-obsidian-border"
+                >
+                  Close
+                </button>
+              </div>
             </div>
           </div>
         </div>
