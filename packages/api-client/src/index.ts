@@ -249,6 +249,25 @@ export class ConnectMeApiClient {
     return this.request(`/admin/codes/${encodeURIComponent(id)}/revoke`, { method: "POST" });
   }
 
+  async revokeCodes(ids: string[]): Promise<ApiResponse<{ revokedCount: number }>> {
+    return this.request("/admin/codes/bulk-revoke", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids }),
+    });
+  }
+
+  async getCodePrintAssets(ids: string[]): Promise<ApiResponse<{ count: number; codes: GeneratedCodeDetail[] }>> {
+    return this.request("/admin/codes/print-assets", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(this.publicOrigin ? { "X-ConnectMe-Public-Origin": this.publicOrigin } : {}),
+      },
+      body: JSON.stringify({ ids }),
+    });
+  }
+
   async listContacts(params?: { page?: number; limit?: number; status?: string; search?: string }): Promise<ApiResponse<ContactItem[]>> {
     const query = new URLSearchParams();
     if (params?.page) query.set("page", String(params.page));
