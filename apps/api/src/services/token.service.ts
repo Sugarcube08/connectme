@@ -75,12 +75,14 @@ export class TokenService {
     for (let i = 0; i < safeCount; i++) {
       const token = this.generateToken();
       const tokenHash = this.hashToken(token);
+      const encryptedToken = encryptAccessCodeToken(token);
       const url = this.getCanonicalUrl(token, options.publicOrigin);
       const batchLabel = options.label
         ? safeCount > 1 ? `${options.label} #${i + 1}` : options.label
         : null;
       const record = await this.codeRepo.create({
         tokenHash,
+        encryptedToken,
         createdByAdminId: options.adminUserId,
         label: batchLabel,
         expiresAt: options.expiresAt ? new Date(options.expiresAt) : null,
