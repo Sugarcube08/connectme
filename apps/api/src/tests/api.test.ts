@@ -372,6 +372,8 @@ describe("Core Operations: Code Generation, Atomic Single-Use Redemption & Concu
     expect(storedSecondCode?.tokenHash).toMatch(/^hmac-sha256:/);
     expect(storedSecondCode?.tokenHash).not.toContain(secondCode.token);
     expect(storedSecondCode?.tokenHash).not.toBe(createHash("sha256").update(secondCode.token).digest("hex"));
+    expect(storedSecondCode?.encryptedToken).toBeTruthy();
+    expect(storedSecondCode?.encryptedToken).not.toContain(secondCode.token);
 
     const secondCodes = await request(app)
       .get("/api/v1/admin/codes")
@@ -384,6 +386,23 @@ describe("Core Operations: Code Generation, Atomic Single-Use Redemption & Concu
       .set("Authorization", `Bearer ${adminToken}`);
     expect(firstCodes.status).toBe(200);
     expect(firstCodes.body.data.some((item: any) => item.id === secondCode.id)).toBe(false);
+
+    const ownerPrintAssets = await request(app)
+      .post("/api/v1/admin/codes/print-assets")
+      .set("Authorization", `Bearer ${secondAccessToken}`)
+      .send({ ids: [secondCode.id] });
+    expect(ownerPrintAssets.status).toBe(200);
+    expect(ownerPrintAssets.body.data.count).toBe(1);
+    expect(ownerPrintAssets.body.data.codes[0].token).toBe(secondCode.token);
+    expect(ownerPrintAssets.body.data.codes[0].url).toContain(secondCode.token);
+    expect(ownerPrintAssets.headers["cache-control"]).toContain("no-store");
+
+    // An administrator must not be able to decrypt/print another admin's code.
+    const foreignPrintAssets = await request(app)
+      .post("/api/v1/admin/codes/print-assets")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ ids: [secondCode.id] });
+    expect(foreignPrintAssets.status).toBe(404);
 
     const firstCodeId = firstCodes.body.data[0].id as string;
     const forbiddenRevoke = await request(app)
@@ -445,6 +464,25 @@ describe("Core Operations: Code Generation, Atomic Single-Use Redemption & Concu
     expect(afterForbiddenUpdate.status).toBe(200);
     expect(afterForbiddenUpdate.body.data.followUpStatus).toBe(beforeForbiddenUpdate.body.data.followUpStatus);
     expect(afterForbiddenUpdate.body.data.discussionNotes).toBe(beforeForbiddenUpdate.body.data.discussionNotes);
+
+    const bulkCodeRes = await request(app)
+      .post("/api/v1/admin/codes")
+      .set("Authorization", `Bearer ${secondAccessToken}`)
+      .send({ label: "Bulk revoke selection" });
+    expect(bulkCodeRes.status).toBe(201);
+    const bulkCode = bulkCodeRes.body.data;
+
+    const bulkRevokeRes = await request(app)
+      .post("/api/v1/admin/codes/bulk-revoke")
+      .set("Authorization", `Bearer ${secondAccessToken}`)
+      .send({ ids: [bulkCode.id] });
+    expect(bulkRevokeRes.status).toBe(200);
+    expect(bulkRevokeRes.body.data.revokedCount).toBe(1);
+
+    const revokedCheck = await request(app).get(`/api/v1/public/codes/${bulkCode.token}`);
+    expect(revokedCheck.status).toBe(200);
+    expect(revokedCheck.body.data.eligible).toBe(false);
+    expect(revokedCheck.body.data.codeStatus).toBe("REVOKED");
   });
 
 });
