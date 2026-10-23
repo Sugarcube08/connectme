@@ -54,6 +54,7 @@ export default function AdminCodesPage() {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [selectedNonPrintableIds, setSelectedNonPrintableIds] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
 
   // Generation controls.
@@ -200,6 +201,12 @@ export default function AdminCodesPage() {
           next.delete(id);
           return next;
         });
+        setSelectedNonPrintableIds((current) => {
+          const next = new Set(current);
+          next.delete(id);
+          return next;
+        });
+        setPreviewAsset((current) => current?.id === id ? null : current);
         void fetchCodes();
       } else {
         alert(res.error?.message || "Failed to revoke code.");
@@ -209,15 +216,23 @@ export default function AdminCodesPage() {
     }
   };
 
-  const selectableCodes = codes.filter((code) => code.canPrint && code.status === "ACTIVE");
+  // Any active code may be selected for bulk revoke. Printing is separately
+  // constrained to encrypted-token records because legacy digests are one-way. 
+  const selectableCodes = codes.filter((code) => code.status === "ACTIVE");
   const allVisibleSelected =
     selectableCodes.length > 0 && selectableCodes.every((code) => selectedIds.has(code.id));
 
-  const toggleOne = (id: string, checked: boolean) => {
+  const toggleOne = (code: AccessCodeItem, checked: boolean) => {
     setSelectedIds((current) => {
       const next = new Set(current);
-      if (checked) next.add(id);
-      else next.delete(id);
+      if (checked) next.add(code.id);
+      else next.delete(code.id);
+      return next;
+    });
+    setSelectedNonPrintableIds((current) => {
+      const next = new Set(current);
+      if (checked && !code.canPrint) next.add(code.id);
+      else next.delete(code.id);
       return next;
     });
   };
@@ -227,6 +242,18 @@ export default function AdminCodesPage() {
       const next = new Set(current);
       if (allVisibleSelected) selectableCodes.forEach((code) => next.delete(code.id));
       else selectableCodes.forEach((code) => next.add(code.id));
+      return next;
+    });
+    setSelectedNonPrintableIds((current) => {
+      const next = new Set(current);
+      if (allVisibleSelected) {
+        selectableCodes.forEach((code) => next.delete(code.id));
+      } else {
+        selectableCodes.forEach((code) => {
+          if (code.canPrint) next.delete(code.id);
+          else next.add(code.id);
+        });
+      }
       return next;
     });
   };
@@ -239,6 +266,10 @@ export default function AdminCodesPage() {
     }
     if (ids.length > 100) {
       alert("A bulk operation supports up to 100 codes at a time.");
+      return null;
+    }
+    if (selectedNonPrintableIds.size > 0) {
+      alert("Your selection includes legacy active codes that cannot be reprinted. Unselect those codes before previewing, downloading, or printing. They can still be revoked in bulk.");
       return null;
     }
 
@@ -327,6 +358,8 @@ export default function AdminCodesPage() {
         return;
       }
       setSelectedIds(new Set());
+      setSelectedNonPrintableIds(new Set());
+      if (previewAsset && ids.includes(previewAsset.id)) setPreviewAsset(null);
       alert(`Revoked ${res.data?.revokedCount ?? 0} code(s).`);
       void fetchCodes();
     } catch {
@@ -625,10 +658,10 @@ export default function AdminCodesPage() {
                     return (
                       <tr key={code.id} className="transition hover:bg-obsidian-elevated/30">
                         <td className="px-4 py-3.5">
-                          <input type="checkbox" checked={selectedIds.has(code.id)} disabled={!canSelect}
-                            onChange={(e) => toggleOne(code.id, e.target.checked)}
+                          <input type="checkbox" checked={selectedIds.has(code.id)} disabled={code.status !== "ACTIVE"}
+                            onChange={(e) => toggleOne(code, e.target.checked)}
                             aria-label={`Select ${code.label || "access code"}`}
-                            title={canSelect ? "Select for bulk print/download/revoke" : "Only encrypted, active codes can be selected for reprinting"}
+                            title={canSelect ? "Select for bulk operations" : "Active legacy code: can be bulk-revoked, but not reprinted"}
                             className="h-4 w-4 accent-violet-600 disabled:opacity-30" />
                         </td>
                         <td className="px-4 py-3.5 font-medium">
