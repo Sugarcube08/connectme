@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   QrCode,
   Plus,
@@ -73,6 +73,7 @@ export default function AdminCodesPage() {
 
   const [cardDesign, setCardDesign] = useState<CardDesign>(DEFAULT_CARD_DESIGN);
   const [designLoaded, setDesignLoaded] = useState(false);
+  const initialPreviewRequested = useRef(false);
 
   useEffect(() => {
     try {
@@ -109,6 +110,21 @@ export default function AdminCodesPage() {
       if (res.success && res.data) {
         setCodes(res.data);
         setTotalPages(res.meta?.totalPages || 1);
+
+        // Load the first active, encrypted code into the card preview once. The
+        // code is not auto-selected for bulk actions, so this cannot accidentally
+        // enable a bulk revoke/print operation.
+        if (!initialPreviewRequested.current) {
+          initialPreviewRequested.current = true;
+          const firstPrintable = res.data.find((code) => code.canPrint && code.status === "ACTIVE");
+          if (firstPrintable) {
+            void apiClient.getCodePrintAssets([firstPrintable.id]).then((assets) => {
+              if (assets.success && assets.data?.codes[0]) {
+                setPreviewAsset(assets.data.codes[0]);
+              }
+            });
+          }
+        }
       }
     } catch {
       console.error("Failed to fetch access codes");
