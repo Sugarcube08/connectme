@@ -7,15 +7,17 @@ This document records the security properties implemented today and the remainin
 ### Redeem/access codes
 
 - Tokens contain 256 bits of cryptographically secure randomness.
-- The raw token is returned only in the one-time code-generation response so the administrator can save/print the QR. It is not persisted in MySQL.
-- New tokens are stored as HMAC-SHA-256(token, ACCESS_CODE_PEPPER) digests. The pepper is an independent secret stored in the API hosting environment, never in the database or frontend bundle.
+- Tokens contain 256 bits of random entropy. A one-way HMAC-SHA-256(token, ACCESS_CODE_PEPPER) digest is the lookup/verification value.
+- New tokens also have an AES-256-GCM authenticated-encryption envelope in MySQL, using an independent `ACCESS_CODE_ENCRYPTION_KEY` that is held only in the API secret manager. This second representation permits an authenticated owner to reprint a still-active QR without storing plaintext tokens in the database.
+- The normal list/export APIs never return token plaintext or the encrypted envelope. The dedicated print-assets endpoint verifies code ownership first, allows only active/non-expired codes, decrypts in memory, returns private no-store responses, and is authenticated as the owning admin.
+- Keep the HMAC pepper and AES-GCM key out of MySQL, source control, logs, and frontend bundles. A database-only leak should not yield redeemable plaintext tokens; compromise of both the database and application secrets is a different threat model.
 - The public endpoint validates the presented token by computing its digest and atomically consumes an active, unexpired code in the same transaction as its contact submission.
 - Code creation obtains createdByAdminId from the authenticated API principal, never from request input.
 - Code listing, export, revoke, contact list/detail/update/image access, exports, and dashboard metrics are scoped to the authenticated administrator through the originating code's owner.
 - A code submitted by a visitor does not grant that visitor access to the saved contact. Only the admin who created that code can retrieve the resulting contact.
 - Existing legacy SHA-256 digests remain supported for compatibility. New codes always use the peppered HMAC format.
 
-**Do not encrypt redeem tokens reversibly.** Connect Me only needs to compare a presented token; it does not need to recover the original value. A keyed digest is the appropriate storage format. Encryption would require storing/operating a decryption key and would turn a database plus key compromise into recoverable active links. The 256-bit token entropy and HMAC pepper protect the database-only compromise case. If a token is lost, generate a new code; the original token cannot be recovered from the database.
+The HMAC digest remains the value used to verify visitor-supplied tokens; the encrypted envelope exists only because admins explicitly need a controlled way to reprint an existing active code. AES-256-GCM authenticates the envelope, and the independent key is not stored alongside the ciphertext in MySQL. Do not expose a general token-decryption endpoint: decryption must stay behind owner checks and active/expiry checks. Codes created before the encrypted envelope migration have no ciphertext and cannot be reprinted, because a one-way digest cannot be inverted; create replacement codes for new cards.
 
 ### Administrator authentication
 
@@ -35,8 +37,9 @@ Set independent, randomly generated values for:
 - SESSION_SECRET
 - JWT_SECRET
 - ACCESS_CODE_PEPPER
+- ACCESS_CODE_ENCRYPTION_KEY
 
-Each must be at least 32 characters. Keep them only in the API hosting environment/secret manager. Never set them as NEXT_PUBLIC_* or EXPO_PUBLIC_*. Keep the same ACCESS_CODE_PEPPER across API instances; changing it invalidates HMAC-based codes unless a planned multi-pepper verification/rotation strategy is implemented. Rotating SESSION_SECRET or JWT_SECRET invalidates the corresponding access sessions/tokens.
+`SESSION_SECRET`, `JWT_SECRET`, and `ACCESS_CODE_PEPPER` must each be at least 32 characters. `ACCESS_CODE_ENCRYPTION_KEY` must be exactly 64 hexadecimal characters (32 random bytes). Keep all four only in the API hosting environment/secret manager. Never set them as `NEXT_PUBLIC_*` or `EXPO_PUBLIC_*`. Keep `ACCESS_CODE_PEPPER` stable across API instances; changing it invalidates HMAC-based codes unless a planned multi-pepper verification/rotation strategy is implemented. Keep `ACCESS_CODE_ENCRYPTION_KEY` stable and securely backed up; losing it prevents QR reprinting for encrypted records although digest verification/redemption can still work. Key rotation for encrypted envelopes needs a planned decrypt-with-old / re-encrypt-with-new maintenance process; that workflow is not automated yet. Rotating `SESSION_SECRET` or `JWT_SECRET` invalidates the corresponding access sessions/tokens.
 
 ## Security decisions still to make
 
@@ -55,7 +58,8 @@ Before public launch, verify:
 - [ ] Two different admins cannot list/export/revoke each other's codes.
 - [ ] Two different admins cannot view, edit, export, or fetch images for each other's submissions.
 - [ ] Redeeming one admin's code creates a submission visible only to that admin.
-- [ ] The database stores HMAC digests, not raw access tokens.
+- [ ] The database stores HMAC digests and authenticated encrypted envelopes, not raw access tokens or decryption keys.
+- [ ] Reprint assets are returned only to the authenticated owning admin, only for active/non-expired codes, with cache disabled.
 - [ ] Web responses contain no bearer JWT; web cookies are HTTP-only, secure in production, and have the expected lifetimes.
 - [ ] Mobile refresh returns a new access JWT and refresh token; replay of the old refresh token fails.
 - [ ] Browser API requests refresh once after an expired access credential and retry using the rotated credential/cookies.
