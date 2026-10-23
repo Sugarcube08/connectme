@@ -60,6 +60,7 @@ process.env.NODE_ENV = "test";
 if (!process.env.SESSION_SECRET?.trim()) process.env.SESSION_SECRET = randomBytes(32).toString("hex");
 if (!process.env.JWT_SECRET?.trim()) process.env.JWT_SECRET = randomBytes(32).toString("hex");
 if (!process.env.ACCESS_CODE_PEPPER?.trim()) process.env.ACCESS_CODE_PEPPER = randomBytes(32).toString("hex");
+if (!process.env.ACCESS_CODE_ENCRYPTION_KEY?.trim()) process.env.ACCESS_CODE_ENCRYPTION_KEY = randomBytes(32).toString("hex");
 
 export default defineConfig({
   test: {
