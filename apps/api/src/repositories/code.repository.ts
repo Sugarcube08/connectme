@@ -3,6 +3,7 @@ import { prisma, AccessCode, CodeStatus } from "@connectme/database";
 export class CodeRepository {
   async create(data: {
     tokenHash: string;
+    encryptedToken: string;
     createdByAdminId: string;
     label?: string | null;
     expiresAt?: Date | null;
@@ -10,6 +11,7 @@ export class CodeRepository {
     return prisma.accessCode.create({
       data: {
         tokenHash: data.tokenHash,
+        encryptedToken: data.encryptedToken,
         createdByAdminId: data.createdByAdminId,
         label: data.label || null,
         expiresAt: data.expiresAt || null,
@@ -24,12 +26,27 @@ export class CodeRepository {
     });
   }
 
+  async findOwnedByIds(ids: string[], adminUserId: string) {
+    return prisma.accessCode.findMany({
+      where: { id: { in: ids }, createdByAdminId: adminUserId },
+      include: { submission: { select: { id: true, fullName: true } } },
+    });
+  }
+
   async revoke(id: string, adminUserId: string): Promise<boolean> {
     const res = await prisma.accessCode.updateMany({
       where: { id, createdByAdminId: adminUserId, status: "ACTIVE" },
       data: { status: "REVOKED", revokedAt: new Date() },
     });
     return res.count > 0;
+  }
+
+  async revokeMany(ids: string[], adminUserId: string): Promise<number> {
+    const res = await prisma.accessCode.updateMany({
+      where: { id: { in: ids }, createdByAdminId: adminUserId, status: "ACTIVE" },
+      data: { status: "REVOKED", revokedAt: new Date() },
+    });
+    return res.count;
   }
 
   async list(params: {
