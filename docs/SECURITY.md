@@ -6,8 +6,7 @@ This document records the security properties implemented today and the remainin
 
 ### Redeem/access codes
 
-- Tokens contain 256 bits of cryptographically secure randomness.
-- Tokens contain 256 bits of random entropy. A one-way HMAC-SHA-256(token, ACCESS_CODE_PEPPER) digest is the lookup/verification value.
+- Tokens contain 256 bits of cryptographically secure randomness. A one-way HMAC-SHA-256(token, ACCESS_CODE_PEPPER) digest is the lookup/verification value.
 - New tokens also have an AES-256-GCM authenticated-encryption envelope in MySQL, using an independent `ACCESS_CODE_ENCRYPTION_KEY` that is held only in the API secret manager. This second representation permits an authenticated owner to reprint a still-active QR without storing plaintext tokens in the database.
 - The normal list/export APIs never return token plaintext or the encrypted envelope. The dedicated print-assets endpoint verifies code ownership first, allows only active/non-expired codes, decrypts in memory, returns private no-store responses, and is authenticated as the owning admin.
 - Keep the HMAC pepper and AES-GCM key out of MySQL, source control, logs, and frontend bundles. A database-only leak should not yield redeemable plaintext tokens; compromise of both the database and application secrets is a different threat model.
