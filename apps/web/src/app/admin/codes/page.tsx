@@ -18,7 +18,6 @@ import {
   Eye,
   Palette,
   RotateCcw,
-  Layers,
 } from "lucide-react";
 import { AccessCodeItem, GeneratedCodeDetail, CodeStatus } from "@connectme/contracts";
 import { apiClient } from "@/lib/api";
@@ -152,17 +151,22 @@ export default function AdminCodesPage() {
         expiresAt,
       });
 
-      if (res.success && res.data) {
-        const details: GeneratedCodeDetail[] =
-          "codes" in res.data ? res.data.codes : [res.data];
-        setShowGenerateModal(false);
-        setGeneratedResults(details);
-        setSelectedIds(new Set(details.filter((item) => item.canPrint).map((item) => item.id)));
-        setPreviewAsset(details[0] || null);
-        void fetchCodes();
-      } else {
-        alert(res.error?.message || "Failed to generate access codes.");
+      if (!res.success) {
+        alert(res.error.message || "Failed to generate access codes.");
+        return;
       }
+      if (!res.data) {
+        alert("The API returned no generated codes.");
+        return;
+      }
+
+      const details: GeneratedCodeDetail[] =
+        "codes" in res.data ? res.data.codes : [res.data];
+      setShowGenerateModal(false);
+      setGeneratedResults(details);
+      setSelectedIds(new Set(details.filter((item) => item.canPrint).map((item) => item.id)));
+      setPreviewAsset(details[0] || null);
+      void fetchCodes();
     } catch {
       alert("Failed to generate access codes.");
     } finally {
@@ -223,8 +227,13 @@ export default function AdminCodesPage() {
     }
 
     const res = await apiClient.getCodePrintAssets(ids);
-    if (!res.success || !res.data) {
-      alert(res.error?.message || "Could not load QR assets for printing.");
+    if (!res.success) {
+      alert(res.error.message || "Could not load QR assets for printing.");
+      void fetchCodes();
+      return null;
+    }
+    if (!res.data) {
+      alert("The API returned no QR print assets.");
       void fetchCodes();
       return null;
     }
@@ -780,7 +789,7 @@ export default function AdminCodesPage() {
         </div>
       )}
 
-      <style jsx global>{`
+      <style>{`
         .print-cards-container { display: none; }
         @media print {
           @page { size: A4 portrait; margin: 8mm; }
