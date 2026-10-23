@@ -239,7 +239,7 @@ paths:
             type: string
       responses:
         '200':
-          description: Paginated codes created by the authenticated administrator only (raw tokens are never returned)
+          description: Paginated codes created by the authenticated administrator only. The normal list contains neither plaintext tokens nor encrypted token envelopes; canPrint indicates if an active code has an encrypted QR available for owner-authorized reprinting.
     post:
       summary: Generate single or batch access codes
       security:
@@ -262,7 +262,114 @@ paths:
                   format: date-time
       responses:
         '201':
-          description: One-time 256-bit tokens and QR assets; database stores keyed HMAC digests, not raw tokens
+          description: One-time 256-bit tokens and QR assets. MySQL stores a keyed HMAC digest and AES-256-GCM encrypted envelope, not plaintext tokens.
+
+  /admin/codes/print-assets:
+    post:
+      summary: Resolve QR assets for owner-authorized printing
+      description: |
+        Accepts selected code IDs and returns QR assets only when every ID belongs to the authenticated administrator.
+        Only active, non-expired codes with an encrypted token envelope can be printed. Legacy codes created before encrypted-token storage cannot be restored.
+        The response disables caching and includes token values only for this explicit owner-scoped operation.
+      security:
+        - BearerAuth: []
+        - CookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ids]
+              properties:
+                ids:
+                  type: array
+                  minItems: 1
+                  maxItems: 100
+                  uniqueItems: true
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: Owner-authorized QR print assets, returned with Cache-Control private, no-store
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+              example: private, no-store, max-age=0
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      count:
+                        type: integer
+                      codes:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                            token:
+                              type: string
+                            url:
+                              type: string
+                              format: uri
+                            qrDataUrl:
+                              type: string
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          description: At least one selected code is missing or is not owned by this administrator
+          $ref: '#/components/responses/ErrorResponse'
+        '409':
+          description: One or more codes are inactive, expired, pre-migration, or have an invalid encrypted envelope
+          $ref: '#/components/responses/ErrorResponse'
+
+  /admin/codes/bulk-revoke:
+    post:
+      summary: Revoke selected active codes owned by the current administrator
+      security:
+        - BearerAuth: []
+        - CookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ids]
+              properties:
+                ids:
+                  type: array
+                  minItems: 1
+                  maxItems: 100
+                  uniqueItems: true
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: Number of owned active codes revoked
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      revokedCount:
+                        type: integer
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
 
   /admin/codes/{id}/revoke:
     post:
