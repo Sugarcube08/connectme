@@ -631,7 +631,7 @@ export default function AdminCodesPage() {
         </div>
 
         <p className="text-[10px] leading-relaxed text-slate">
-          Security note: legacy codes created before encrypted-token storage remain redeemable, but their original URLs cannot be recovered for reprinting. Those rows are not selectable; generate replacements for new cards.
+          Security note: legacy codes created before encrypted-token storage remain redeemable and can be bulk-revoked, but their original URLs cannot be recovered for reprinting. Unselect legacy codes before printing or downloading QR assets; generate replacements for new cards.
         </p>
 
         {/* Codes table. */}
