@@ -44,6 +44,7 @@ export function serializeAccessCode(code: {
   expiresAt: Date | null;
   consumedAt: Date | null;
   revokedAt: Date | null;
+  encryptedToken?: string | null;
   submission?: { id: string; fullName: string } | null;
 }): AccessCodeItem {
   let effectiveStatus: CodeStatus = code.status as CodeStatus;
@@ -60,6 +61,7 @@ export function serializeAccessCode(code: {
     consumedAt: code.consumedAt ? code.consumedAt.toISOString() : null,
     revokedAt: code.revokedAt ? code.revokedAt.toISOString() : null,
     hasSubmission: !!code.submission,
+    canPrint: Boolean(code.encryptedToken) && effectiveStatus === "ACTIVE",
     contactName: code.submission?.fullName || null,
   };
 }
