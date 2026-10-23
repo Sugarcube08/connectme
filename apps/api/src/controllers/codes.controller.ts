@@ -46,6 +46,40 @@ export class CodesController {
     } catch (err) { next(err); }
   };
 
+  printAssets = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const codes = await this.tokenService.getPrintAssets(
+        req.body?.ids,
+        req.adminUser!.id,
+        await this.publicOriginService.resolve(req)
+      );
+      res.setHeader("Cache-Control", "private, no-store, max-age=0");
+      res.setHeader("Pragma", "no-cache");
+      return res.status(200).json({ success: true, data: { count: codes.length, codes } });
+    } catch (err) { next(err); }
+  };
+
+  bulkRevoke = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const ids = req.body?.ids;
+      if (
+        !Array.isArray(ids) ||
+        ids.length < 1 ||
+        ids.length > 100 ||
+        !ids.every((id: unknown) => typeof id === "string" && id.length > 0 && id.length <= 191) ||
+        new Set(ids).size !== ids.length
+      ) {
+        return res.status(400).json({
+          success: false,
+          error: { code: "VALIDATION_ERROR", message: "Select 1 to 100 unique access-code IDs." },
+        });
+      }
+
+      const revoked = await this.tokenService.revokeMany(ids, req.adminUser!.id);
+      return res.status(200).json({ success: true, data: { revokedCount: revoked } });
+    } catch (err) { next(err); }
+  };
+
   revoke = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const revoked = await this.tokenService.revoke(String(req.params.id), req.adminUser!.id);

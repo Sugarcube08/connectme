@@ -8,25 +8,29 @@ Provision a managed MySQL database through your chosen provider. Use a **new, em
 
 The checked-in `apps/api/.env.example` documents local API settings. Vercel does not load this file automatically; set the variables in the API project's Environment Variables settings.
 
-Set the API project's production environment variables in Vercel. `ACCESS_CODE_PEPPER` is a new required variable for this release; configure it before deploying the new revision:
+Set the API project's production environment variables in Vercel. `ACCESS_CODE_PEPPER` and `ACCESS_CODE_ENCRYPTION_KEY` are required for the current code-storage model; configure both before deploying the new revision:
 
 | Variable | Required | Value |
 |---|---:|---|
 | `DATABASE_URL` | Yes | Provider-issued MySQL URL, `mysql://user:password@host:3306/database`; use the provider's recommended pooled URL for serverless runtime when available. |
 | `SESSION_SECRET` | Yes | Unique random secret, at least 32 characters. |
-| `JWT_SECRET` | Yes | A different unique secret, at least 32 characters. |\n| `ACCESS_CODE_PEPPER` | Yes | Separate random secret, at least 32 characters, used for new redeem-code HMAC digests. Preserve it across deployments. |
+| `JWT_SECRET` | Yes | A different unique secret, at least 32 characters. |
+| `ACCESS_CODE_PEPPER` | Yes | Separate random secret, at least 32 characters, used for new redeem-code HMAC digests. Preserve it across deployments. |
+| `ACCESS_CODE_ENCRYPTION_KEY` | Yes | 32 random bytes encoded as exactly 64 hexadecimal characters; generate with `openssl rand -hex 32`. Keep it outside the database and stable across deployments. |
 | `NODE_ENV` | Recommended | `production`. |
 | `MAX_IMAGE_SIZE_BYTES` | Optional | Defaults to `2097152` (2 MiB). |
 | `MAX_BATCH_CODE_COUNT` | Optional | Defaults to `100`. |
 
-Generate independent signing keys locally:
+Generate four independent values locally:
 
 ```bash
-openssl rand -hex 32
-openssl rand -hex 32
+openssl rand -hex 32  # SESSION_SECRET
+openssl rand -hex 32  # JWT_SECRET
+openssl rand -hex 32  # ACCESS_CODE_PEPPER
+openssl rand -hex 32  # ACCESS_CODE_ENCRYPTION_KEY
 ```
 
-Paste the outputs into Vercel's Environment Variables settings. Never add real values to `.env.example`, commit them, or expose them as `NEXT_PUBLIC_*` variables. Prisma requires special characters in URL components—including usernames and passwords—to be percent-encoded. Example: `p@ss:word%` becomes `p%40ss%3Aword%25`. Keep the provider-issued connection URL encoded as supplied; do not manually decode it. New redeem codes are 256-bit random values; MySQL stores only a keyed HMAC-SHA-256 digest, never a recoverable token. Keep `ACCESS_CODE_PEPPER` stable: losing/changing it would make newly issued codes unverifiable. Older SHA-256 code digests remain accepted during transition. Access JWTs expire after 72 hours; refresh tokens expire after 7 days and are rotated on use.
+Paste the four distinct outputs into Vercel's Environment Variables settings. Never add real values to `.env.example`, commit them, or expose them as `NEXT_PUBLIC_*` variables. Prisma requires special characters in URL components—including usernames and passwords—to be percent-encoded. Example: `p@ss:word%` becomes `p%40ss%3Aword%25`. Keep the provider-issued connection URL encoded as supplied; do not manually decode it. New redeem codes are 256-bit random values. MySQL stores a keyed HMAC-SHA-256 digest for lookup and an AES-256-GCM authenticated-encryption envelope for owner-authorized reprinting; the decryption key is not stored in MySQL. Keep both `ACCESS_CODE_PEPPER` and `ACCESS_CODE_ENCRYPTION_KEY` stable and backed up in your secret manager. Losing the pepper makes new HMAC-based codes unverifiable; losing the encryption key leaves existing codes redeemable but prevents their QR assets from being reprinted. Older SHA-256 code digests remain accepted during transition. Access JWTs expire after 72 hours; refresh tokens expire after 7 days and are rotated on use.
 
 ### Removed origin variables
 
@@ -93,7 +97,7 @@ If a Vercel runtime log says `Invalid export found in module ".../apps/api/src/a
 - Both `apps/api/src/app.ts` and `apps/api/src/index.ts` export the Express application as the default export.
 - Ensure the deployment is on the latest `main` commit that includes the default export in `apps/api/src/app.ts`, and redeploy with build cache cleared if needed.
  
- ### Troubleshooting: runtime still requires legacy origin variables
+### Troubleshooting: runtime still requires legacy origin variables
 
 
 If a Vercel runtime log says `Missing required production environment values: CORS_ORIGIN, QR_CANONICAL_ORIGIN`, that function is running an older API bundle. The current `apps/api/src/config/env.ts` does not declare or require either variable. **Do not restore the obsolete variables to mask the error.**

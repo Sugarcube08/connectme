@@ -12,6 +12,7 @@ describe("production environment configuration", () => {
     vi.stubEnv("SESSION_SECRET", "s".repeat(32));
     vi.stubEnv("JWT_SECRET", "j".repeat(32));
     vi.stubEnv("ACCESS_CODE_PEPPER", "p".repeat(32));
+    vi.stubEnv("ACCESS_CODE_ENCRYPTION_KEY", "0123456789abcdef".repeat(4));
     vi.stubEnv("CORS_ORIGIN", undefined);
     vi.stubEnv("QR_CANONICAL_ORIGIN", undefined);
     vi.resetModules();
@@ -21,5 +22,6 @@ describe("production environment configuration", () => {
     expect(config.NODE_ENV).toBe("production");
     expect(config).not.toHaveProperty("CORS_ORIGIN");
     expect(config).not.toHaveProperty("QR_CANONICAL_ORIGIN");
+    expect(config.ACCESS_CODE_ENCRYPTION_KEY).toHaveLength(64);
   });
 });

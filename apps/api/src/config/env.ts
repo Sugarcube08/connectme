@@ -6,8 +6,9 @@ import { isValidMySqlUrl } from "./mysql-url";
 
 // Respect process/Vercel/CI variables first. For files, a non-empty workspace-local
 // value wins; an empty template placeholder falls back to the root .env.
-// Access-code HMAC uses a dedicated pepper so DB-only leaks do not permit offline
-// token checking. CORS/QR origins are derived and need no legacy environment values.
+// Access-code HMAC and authenticated encryption use independent secrets. A database-only
+// leak must not expose token plaintext or allow offline digest checking. CORS/QR origins
+// are derived and need no legacy environment values.
 const environmentProvidedByProcess = new Set(Object.keys(process.env));
 
 function loadEnvFallback(fileName: string): void {
@@ -41,6 +42,7 @@ const EnvSchema = z.object({
   SESSION_SECRET: z.string().min(32, "SESSION_SECRET must be at least 32 characters."),
   JWT_SECRET: z.string().min(32, "JWT_SECRET must be at least 32 characters."),
   ACCESS_CODE_PEPPER: z.string().min(32, "ACCESS_CODE_PEPPER must be at least 32 characters."),
+  ACCESS_CODE_ENCRYPTION_KEY: z.string().regex(/^[0-9a-fA-F]{64}$/, "ACCESS_CODE_ENCRYPTION_KEY must be exactly 32 bytes encoded as 64 hexadecimal characters."),
   MAX_IMAGE_SIZE_BYTES: z.coerce.number().int().positive().default(5242880),
   MAX_BATCH_CODE_COUNT: z.coerce.number().int().min(1).max(100).default(100),
 });
