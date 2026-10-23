@@ -47,6 +47,8 @@ model AdminUser {
 model AccessCode {
   id                String             @id @default(uuid())
   tokenHash         String             @unique @map("token_hash")
+  // AES-256-GCM envelope; key is stored only in the runtime secret manager.
+  encryptedToken    String?            @map("encrypted_token") @db.VarChar(255)
   createdByAdminId  String?            @map("created_by_admin_id")
   createdByAdmin    AdminUser?         @relation(fields: [createdByAdminId], references: [id], onDelete: SetNull)
   label             String?
