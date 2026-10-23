@@ -1,9 +1,11 @@
 import { createHash, createHmac, randomBytes } from "node:crypto";
+import { decryptAccessCodeToken, encryptAccessCodeToken } from "./access-code-crypto";
 import QRCode from "qrcode";
 import { CodeRepository } from "../repositories/code.repository";
 import { config } from "../config/env";
 import { serializeAccessCode } from "../serializers";
 import { AccessCodeItem, GeneratedCodeDetail, CodeStatus } from "@connectme/contracts";
+import { ConflictError, NotFoundError, ValidationError } from "../errors/app-error";
 
 export class TokenService {
   constructor(private codeRepo = new CodeRepository()) {}
@@ -49,10 +51,12 @@ export class TokenService {
   }): Promise<GeneratedCodeDetail> {
     const token = this.generateToken();
     const tokenHash = this.hashToken(token);
+    const encryptedToken = encryptAccessCodeToken(token);
     const url = this.getCanonicalUrl(token, options.publicOrigin);
     const qrDataUrl = await this.generateQr(url);
     const record = await this.codeRepo.create({
       tokenHash,
+      encryptedToken,
       createdByAdminId: options.adminUserId,
       label: options.label,
       expiresAt: options.expiresAt ? new Date(options.expiresAt) : null,
@@ -102,6 +106,79 @@ export class TokenService {
     }
 
     return { eligible: effectiveStatus === "ACTIVE", status: effectiveStatus, codeId: code.id };
+  }
+
+
+  /**
+   * Returns QR assets only for explicitly selected codes owned by the caller.
+   * The plaintext token is decrypted only for active, non-expired codes and is
+   * never included in the normal list/export API responses.
+   */
+  async getPrintAssets(
+    rawIds: unknown,
+    adminUserId: string,
+    publicOrigin: string
+  ): Promise<GeneratedCodeDetail[]> {
+    if (
+      !Array.isArray(rawIds) ||
+      rawIds.length < 1 ||
+      rawIds.length > config.MAX_BATCH_CODE_COUNT ||
+      !rawIds.every((id) => typeof id === "string" && id.length > 0 && id.length <= 191)
+    ) {
+      throw new ValidationError(`Select between 1 and ${config.MAX_BATCH_CODE_COUNT} valid access codes.`);
+    }
+
+    const ids = [...new Set(rawIds as string[])];
+    if (ids.length !== rawIds.length) {
+      throw new ValidationError("Duplicate access-code IDs are not allowed.");
+    }
+
+    const records = await this.codeRepo.findOwnedByIds(ids, adminUserId);
+    if (records.length !== ids.length) {
+      // Do not reveal whether an unknown ID belongs to a different administrator.
+      throw new NotFoundError("One or more selected codes were not found.", "CODE_SELECTION_NOT_FOUND");
+    }
+
+    const byId = new Map(records.map((record) => [record.id, record]));
+    const orderedRecords = ids.map((id) => byId.get(id)!);
+    const now = new Date();
+
+    if (
+      orderedRecords.some(
+        (record) =>
+          record.status !== "ACTIVE" ||
+          (record.expiresAt !== null && record.expiresAt <= now)
+      )
+    ) {
+      throw new ConflictError(
+        "Only active, non-expired access codes can be printed. Refresh the list and select active codes.",
+        "CODE_NOT_PRINTABLE"
+      );
+    }
+
+    if (orderedRecords.some((record) => !record.encryptedToken)) {
+      throw new ConflictError(
+        "One or more selected codes predate encrypted QR storage and cannot be reprinted. Generate replacement codes for new cards.",
+        "CODE_REQUIRES_REPLACEMENT"
+      );
+    }
+
+    const results: GeneratedCodeDetail[] = [];
+    for (const record of orderedRecords) {
+      let token: string;
+      try {
+        token = decryptAccessCodeToken(record.encryptedToken!);
+      } catch {
+        throw new ConflictError(
+          "An encrypted QR token could not be verified. Revoke that code and generate a replacement.",
+          "CODE_ENCRYPTION_INVALID"
+        );
+      }
+      const url = this.getCanonicalUrl(token, publicOrigin);
+      const qrDataUrl = await this.generateQr(url);
+      results.push({ ...serializeAccessCode(record), token, url, qrDataUrl });
+    }
+    return results;
   }
 
   async revoke(id: string, adminUserId: string): Promise<boolean> {
