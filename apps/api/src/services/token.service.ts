@@ -187,6 +187,10 @@ export class TokenService {
     return this.codeRepo.revoke(id, adminUserId);
   }
 
+  async revokeMany(ids: string[], adminUserId: string): Promise<number> {
+    return this.codeRepo.revokeMany(ids, adminUserId);
+  }
+
   async list(params: {
     adminUserId: string;
     page: number;
