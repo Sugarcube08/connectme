@@ -21,14 +21,16 @@ Set the API project's production environment variables in Vercel. `ACCESS_CODE_P
 | `MAX_IMAGE_SIZE_BYTES` | Optional | Defaults to `2097152` (2 MiB). |
 | `MAX_BATCH_CODE_COUNT` | Optional | Defaults to `100`. |
 
-Generate independent signing keys locally:
+Generate four independent values locally:
 
 ```bash
-openssl rand -hex 32
-openssl rand -hex 32
+openssl rand -hex 32  # SESSION_SECRET
+openssl rand -hex 32  # JWT_SECRET
+openssl rand -hex 32  # ACCESS_CODE_PEPPER
+openssl rand -hex 32  # ACCESS_CODE_ENCRYPTION_KEY
 ```
 
-Generate a separate `ACCESS_CODE_ENCRYPTION_KEY` with `openssl rand -hex 32`. Paste all four secret outputs into Vercel's Environment Variables settings. Never add real values to `.env.example`, commit them, or expose them as `NEXT_PUBLIC_*` variables. Prisma requires special characters in URL components—including usernames and passwords—to be percent-encoded. Example: `p@ss:word%` becomes `p%40ss%3Aword%25`. Keep the provider-issued connection URL encoded as supplied; do not manually decode it. New redeem codes are 256-bit random values. MySQL stores a keyed HMAC-SHA-256 digest for lookup and an AES-256-GCM authenticated-encryption envelope for owner-authorized reprinting; the decryption key is not stored in MySQL. Keep both `ACCESS_CODE_PEPPER` and `ACCESS_CODE_ENCRYPTION_KEY` stable and backed up in your secret manager. Losing the pepper makes new HMAC-based codes unverifiable; losing the encryption key leaves existing codes redeemable but prevents their QR assets from being reprinted. Older SHA-256 code digests remain accepted during transition. Access JWTs expire after 72 hours; refresh tokens expire after 7 days and are rotated on use.
+Paste the four distinct outputs into Vercel's Environment Variables settings. Never add real values to `.env.example`, commit them, or expose them as `NEXT_PUBLIC_*` variables. Prisma requires special characters in URL components—including usernames and passwords—to be percent-encoded. Example: `p@ss:word%` becomes `p%40ss%3Aword%25`. Keep the provider-issued connection URL encoded as supplied; do not manually decode it. New redeem codes are 256-bit random values. MySQL stores a keyed HMAC-SHA-256 digest for lookup and an AES-256-GCM authenticated-encryption envelope for owner-authorized reprinting; the decryption key is not stored in MySQL. Keep both `ACCESS_CODE_PEPPER` and `ACCESS_CODE_ENCRYPTION_KEY` stable and backed up in your secret manager. Losing the pepper makes new HMAC-based codes unverifiable; losing the encryption key leaves existing codes redeemable but prevents their QR assets from being reprinted. Older SHA-256 code digests remain accepted during transition. Access JWTs expire after 72 hours; refresh tokens expire after 7 days and are rotated on use.
 
 ### Removed origin variables
 
