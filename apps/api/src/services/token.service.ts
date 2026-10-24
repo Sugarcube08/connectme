@@ -1,29 +1,32 @@
 import { createHash, createHmac, randomBytes } from "node:crypto";
-import { decryptAccessCodeToken, encryptAccessCodeToken } from "./access-code-crypto";
 import QRCode from "qrcode";
 import { CodeRepository } from "../repositories/code.repository";
 import { config } from "../config/env";
 import { serializeAccessCode } from "../serializers";
 import { AccessCodeItem, GeneratedCodeDetail, CodeStatus } from "@connectme/contracts";
-import { ConflictError, NotFoundError, ValidationError } from "../errors/app-error";
+
+const TOKEN_ALPHABET = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
 export class TokenService {
   constructor(private codeRepo = new CodeRepository()) {}
 
   generateToken(): string {
-    // 256 bits of random entropy; the raw token is only returned at creation time.
-    return randomBytes(32).toString("base64url");
+    // 16 alphanumeric characters (Base62) provides ~95 bits of entropy (62^16 combinations).
+    // Clean URL without encoding issues; compact representation produces lower-density QR codes for faster scanning.
+    const bytes = randomBytes(16);
+    let token = "";
+    for (let i = 0; i < 16; i++) {
+      token += TOKEN_ALPHABET[bytes[i] % 62];
+    }
+    return token;
   }
 
   hashToken(token: string): string {
-    // Access tokens are looked up, never decrypted. A dedicated HMAC pepper makes
-    // a database-only compromise insufficient to validate guessed candidate tokens.
+    // Access tokens can be validated with HMAC pepper.
     return `hmac-sha256:${createHmac("sha256", config.ACCESS_CODE_PEPPER).update(token).digest("hex")}`;
   }
 
   tokenHashCandidates(token: string): string[] {
-    // The plain SHA-256 candidate is for access codes created before the peppered
-    // hash migration. New codes are always stored with the HMAC prefix.
     return [
       this.hashToken(token),
       createHash("sha256").update(token).digest("hex"),
@@ -35,10 +38,11 @@ export class TokenService {
   }
 
   async generateQr(url: string): Promise<string> {
+    // High-resolution 1024x1024 QR data URL for crisp print-ready output at generation time.
     return QRCode.toDataURL(url, {
       errorCorrectionLevel: "H",
       margin: 2,
-      width: 512,
+      width: 1024,
       color: { dark: "#0B0B10", light: "#FFFFFF" },
     });
   }
@@ -51,18 +55,17 @@ export class TokenService {
   }): Promise<GeneratedCodeDetail> {
     const token = this.generateToken();
     const tokenHash = this.hashToken(token);
-    const encryptedToken = encryptAccessCodeToken(token);
     const url = this.getCanonicalUrl(token, options.publicOrigin);
     const qrDataUrl = await this.generateQr(url);
     const record = await this.codeRepo.create({
+      token,
       tokenHash,
-      encryptedToken,
       createdByAdminId: options.adminUserId,
       label: options.label,
       expiresAt: options.expiresAt ? new Date(options.expiresAt) : null,
     });
 
-    return { ...serializeAccessCode(record), token, url, qrDataUrl };
+    return { ...serializeAccessCode(record, options.publicOrigin), token, url, qrDataUrl };
   }
 
   async createBatch(
@@ -70,28 +73,55 @@ export class TokenService {
     options: { adminUserId: string; label?: string; expiresAt?: string | null; publicOrigin: string }
   ): Promise<GeneratedCodeDetail[]> {
     const safeCount = Math.min(Math.max(1, count), config.MAX_BATCH_CODE_COUNT);
-    const results: GeneratedCodeDetail[] = [];
+    const expiresAt = options.expiresAt ? new Date(options.expiresAt) : null;
 
-    for (let i = 0; i < safeCount; i++) {
+    const items = Array.from({ length: safeCount }, (_, i) => {
       const token = this.generateToken();
       const tokenHash = this.hashToken(token);
-      const encryptedToken = encryptAccessCodeToken(token);
       const url = this.getCanonicalUrl(token, options.publicOrigin);
       const batchLabel = options.label
         ? safeCount > 1 ? `${options.label} #${i + 1}` : options.label
         : null;
-      const record = await this.codeRepo.create({
+      return {
+        token,
         tokenHash,
-        encryptedToken,
         createdByAdminId: options.adminUserId,
         label: batchLabel,
-        expiresAt: options.expiresAt ? new Date(options.expiresAt) : null,
-      });
-      const qrDataUrl = await this.generateQr(url);
-      results.push({ ...serializeAccessCode(record), token, url, qrDataUrl });
-    }
+        expiresAt,
+        url,
+      };
+    });
 
-    return results;
+    // High performance: parallel QR rendering and single bulk SQL insertion
+    const [qrDataUrls] = await Promise.all([
+      Promise.all(items.map((item) => this.generateQr(item.url))),
+      this.codeRepo.createMany(items.map(({ url, ...record }) => record)),
+    ]);
+
+    const createdRecords = await this.codeRepo.findOwnedByTokens(
+      items.map((i) => i.token),
+      options.adminUserId
+    );
+    const recordMap = new Map(createdRecords.map((r) => [r.token, r]));
+
+    return items.map((item, index) => {
+      const record = recordMap.get(item.token) || {
+        id: `gen-${item.token}`,
+        label: item.label,
+        status: "ACTIVE",
+        createdAt: new Date(),
+        expiresAt: item.expiresAt,
+        consumedAt: null,
+        revokedAt: null,
+        token: item.token,
+      };
+      return {
+        ...serializeAccessCode(record, options.publicOrigin),
+        token: item.token,
+        url: item.url,
+        qrDataUrl: qrDataUrls[index],
+      };
+    });
   }
 
   async getStatusByToken(token: string): Promise<{
@@ -99,7 +129,7 @@ export class TokenService {
     status: CodeStatus;
     codeId?: string;
   }> {
-    const code = await this.codeRepo.findByTokenHashes(this.tokenHashCandidates(token));
+    const code = await this.codeRepo.findByTokenOrHashes(token, this.tokenHashCandidates(token));
     if (!code) return { eligible: false, status: "REVOKED" };
 
     let effectiveStatus: CodeStatus = code.status as CodeStatus;
@@ -108,79 +138,6 @@ export class TokenService {
     }
 
     return { eligible: effectiveStatus === "ACTIVE", status: effectiveStatus, codeId: code.id };
-  }
-
-
-  /**
-   * Returns QR assets only for explicitly selected codes owned by the caller.
-   * The plaintext token is decrypted only for active, non-expired codes and is
-   * never included in the normal list/export API responses.
-   */
-  async getPrintAssets(
-    rawIds: unknown,
-    adminUserId: string,
-    publicOrigin: string
-  ): Promise<GeneratedCodeDetail[]> {
-    if (
-      !Array.isArray(rawIds) ||
-      rawIds.length < 1 ||
-      rawIds.length > config.MAX_BATCH_CODE_COUNT ||
-      !rawIds.every((id) => typeof id === "string" && id.length > 0 && id.length <= 191)
-    ) {
-      throw new ValidationError(`Select between 1 and ${config.MAX_BATCH_CODE_COUNT} valid access codes.`);
-    }
-
-    const ids = [...new Set(rawIds as string[])];
-    if (ids.length !== rawIds.length) {
-      throw new ValidationError("Duplicate access-code IDs are not allowed.");
-    }
-
-    const records = await this.codeRepo.findOwnedByIds(ids, adminUserId);
-    if (records.length !== ids.length) {
-      // Do not reveal whether an unknown ID belongs to a different administrator.
-      throw new NotFoundError("One or more selected codes were not found.", "CODE_SELECTION_NOT_FOUND");
-    }
-
-    const byId = new Map(records.map((record) => [record.id, record]));
-    const orderedRecords = ids.map((id) => byId.get(id)!);
-    const now = new Date();
-
-    if (
-      orderedRecords.some(
-        (record) =>
-          record.status !== "ACTIVE" ||
-          (record.expiresAt !== null && record.expiresAt <= now)
-      )
-    ) {
-      throw new ConflictError(
-        "Only active, non-expired access codes can be printed. Refresh the list and select active codes.",
-        "CODE_NOT_PRINTABLE"
-      );
-    }
-
-    if (orderedRecords.some((record) => !record.encryptedToken)) {
-      throw new ConflictError(
-        "One or more selected codes predate encrypted QR storage and cannot be reprinted. Generate replacement codes for new cards.",
-        "CODE_REQUIRES_REPLACEMENT"
-      );
-    }
-
-    const results: GeneratedCodeDetail[] = [];
-    for (const record of orderedRecords) {
-      let token: string;
-      try {
-        token = decryptAccessCodeToken(record.encryptedToken!);
-      } catch {
-        throw new ConflictError(
-          "An encrypted QR token could not be verified. Revoke that code and generate a replacement.",
-          "CODE_ENCRYPTION_INVALID"
-        );
-      }
-      const url = this.getCanonicalUrl(token, publicOrigin);
-      const qrDataUrl = await this.generateQr(url);
-      results.push({ ...serializeAccessCode(record), token, url, qrDataUrl });
-    }
-    return results;
   }
 
   async revoke(id: string, adminUserId: string): Promise<boolean> {
@@ -197,6 +154,7 @@ export class TokenService {
     limit: number;
     status?: CodeStatus | "EXPIRED";
     search?: string;
+    publicOrigin?: string;
   }): Promise<{ codes: AccessCodeItem[]; total: number; totalPages: number }> {
     const skip = (params.page - 1) * params.limit;
     const { items, total } = await this.codeRepo.list({
@@ -207,7 +165,7 @@ export class TokenService {
       search: params.search,
     });
     return {
-      codes: items.map(serializeAccessCode),
+      codes: items.map((item) => serializeAccessCode(item, params.publicOrigin)),
       total,
       totalPages: Math.ceil(total / params.limit) || 1,
     };

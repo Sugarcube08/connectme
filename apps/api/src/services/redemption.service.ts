@@ -27,18 +27,26 @@ export class RedemptionService {
     }
 
     const tokenHashes = this.tokenService.tokenHashCandidates(options.token);
+    const tokenFilter = {
+      OR: [
+        { token: options.token },
+        { tokenHash: { in: tokenHashes } },
+      ],
+    };
     const submission = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const updated = await tx.accessCode.updateMany({
         where: {
-          tokenHash: { in: tokenHashes },
-          status: "ACTIVE",
-          OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+          AND: [
+            tokenFilter,
+            { status: "ACTIVE" },
+            { OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] },
+          ],
         },
         data: { status: "CONSUMED", consumedAt: new Date() },
       });
 
       if (updated.count === 0) {
-        const existing = await tx.accessCode.findFirst({ where: { tokenHash: { in: tokenHashes } } });
+        const existing = await tx.accessCode.findFirst({ where: tokenFilter });
         if (!existing) throw new NotFoundError("Access code is invalid or unrecognized.", "TOKEN_NOT_FOUND");
         if (existing.status === "CONSUMED") throw new ConflictError("This access code has already been used.", "ALREADY_CONSUMED");
         if (existing.status === "REVOKED") throw new GoneError("This access link is no longer available.", "TOKEN_REVOKED");
@@ -46,7 +54,7 @@ export class RedemptionService {
         throw new ConflictError("This access code was just redeemed by another request.", "CONCURRENT_CONFLICT");
       }
 
-      const code = await tx.accessCode.findFirstOrThrow({ where: { tokenHash: { in: tokenHashes } } });
+      const code = await tx.accessCode.findFirstOrThrow({ where: tokenFilter });
       const sub = await tx.contactSubmission.create({
         data: {
           accessCodeId: code.id,

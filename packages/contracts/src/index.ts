@@ -43,9 +43,10 @@ export interface AccessCodeItem {
   consumedAt: string | null;
   revokedAt: string | null;
   hasSubmission: boolean;
-  /** Whether this admin-owned active code has a safely stored encrypted token that can be reprinted. */
-  canPrint: boolean;
   contactName?: string | null;
+  token?: string | null;
+  url?: string | null;
+  canPrint?: boolean;
 }
 
 export interface GeneratedCodeDetail extends AccessCodeItem {

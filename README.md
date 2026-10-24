@@ -9,7 +9,7 @@ Connect Me is a lightweight, single-use QR contact-capture system for in-person 
 - Public pages never disclose the owner's phone, email, vCard, social links, or personal identity.
 - No reciprocal contact exchange, public attendee directory, attendee login, OTP, SMS, or AI service is required.
 - Each access token can be redeemed once. Redemption is atomic in MySQL, including under concurrent requests.
-- Optional profile images are normalized and stored in a separate MySQL `LONGBLOB` table. New redeem-code tokens use a HMAC-SHA-256 digest for verification and an AES-256-GCM encrypted envelope for owner-authorized reprinting. Decryption keys remain in the API secret manager; raw tokens are only returned by code creation and explicit owner-scoped print-asset requests.
+- Optional profile images are normalized and stored in a separate MySQL `LONGBLOB` table. High-quality QR codes are generated at creation time. Administrators can copy the redemption link at any time from the dashboard.
 - The owner chooses their own administrator username and password during first-time setup. The initial administrator can provision additional admins. Access JWTs expire after 72 hours; hashed, one-time rotating refresh tokens expire after 7 days.
 
 ## Architecture
@@ -70,7 +70,6 @@ openssl rand -hex 24  # paste output into MYSQL_ROOT_PASSWORD
 openssl rand -hex 32  # paste output into SESSION_SECRET
 openssl rand -hex 32  # run again; paste output into JWT_SECRET
 openssl rand -hex 32  # run again; paste output into ACCESS_CODE_PEPPER
-openssl rand -hex 32  # run again; paste output into ACCESS_CODE_ENCRYPTION_KEY
 openssl rand -hex 24  # paste output into MYSQL_PASSWORD
 ```
 
@@ -130,7 +129,7 @@ For a physical phone, set `EXPO_PUBLIC_API_URL` to an API address reachable from
 
 ## Combined Docker deployment
 
-Fill in database credentials, signing secrets, `ACCESS_CODE_PEPPER`, and `ACCESS_CODE_ENCRYPTION_KEY` in `.env`; keep both code-protection secrets stable across deployments. Use the real public HTTPS website origin for `NEXT_PUBLIC_APP_URL` in production.
+Fill in database credentials, signing secrets, and `ACCESS_CODE_PEPPER` in `.env`. Use the real public HTTPS website origin for `NEXT_PUBLIC_APP_URL` in production.
 
 ```bash
 # Apply schema migrations before starting the application.

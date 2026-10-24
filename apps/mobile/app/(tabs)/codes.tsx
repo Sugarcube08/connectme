@@ -107,10 +107,21 @@ export default function MobileCodesScreen() {
     );
   };
 
+  const shareLink = async (url: string) => {
+    try {
+      await Share.share({
+        message: `Connect with me: ${url}`,
+        url,
+      });
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   const shareCode = async (item: GeneratedCodeDetail) => {
     try {
       await Share.share({
-        message: `Connect with me at Devcon: ${item.url}`,
+        message: `Connect with me: ${item.url}`,
         url: item.url,
       });
     } catch (err) {
@@ -135,7 +146,7 @@ export default function MobileCodesScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.topBar}>
-        <Text style={styles.title}>Visiting Cards ({codes.length})</Text>
+        <Text style={styles.title}>QR Codes ({codes.length})</Text>
         <TouchableOpacity
           style={styles.createButton}
           onPress={() => setModalVisible(true)}
@@ -158,11 +169,11 @@ export default function MobileCodesScreen() {
           renderItem={({ item }) => (
             <View style={styles.card}>
               <View style={styles.cardHeader}>
-                <Text style={styles.codeLabel}>{item.label || "Untitled Card"}</Text>
+                <Text style={styles.codeLabel}>{item.label || "Untitled Code"}</Text>
                 {renderStatus(item.status)}
               </View>
 
-              <Text style={styles.codeId}>ID: {item.id.slice(0, 8)}...</Text>
+              <Text style={styles.codeId}>ID: {item.token ? item.token : `${item.id.slice(0, 8)}...`}</Text>
 
               {item.hasSubmission && item.contactName && (
                 <Text style={styles.redeemedBy}>
@@ -175,14 +186,24 @@ export default function MobileCodesScreen() {
                   Created: {new Date(item.createdAt).toLocaleDateString()}
                 </Text>
 
-                {item.status === "ACTIVE" && (
-                  <TouchableOpacity
-                    onPress={() => handleRevoke(item.id)}
-                    style={styles.revokeButton}
-                  >
-                    <Text style={styles.revokeText}>Revoke</Text>
-                  </TouchableOpacity>
-                )}
+                <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
+                  {item.url && (
+                    <TouchableOpacity
+                      onPress={() => shareLink(item.url!)}
+                      style={styles.linkButton}
+                    >
+                      <Text style={styles.linkText}>Share Link</Text>
+                    </TouchableOpacity>
+                  )}
+                  {item.status === "ACTIVE" && (
+                    <TouchableOpacity
+                      onPress={() => handleRevoke(item.id)}
+                      style={styles.revokeButton}
+                    >
+                      <Text style={styles.revokeText}>Revoke</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
               </View>
             </View>
           )}
@@ -252,7 +273,7 @@ export default function MobileCodesScreen() {
                 Generated {generatedCodes.length} QR Code{generatedCodes.length > 1 ? "s" : ""}
               </Text>
               <Text style={styles.modalSub}>
-                Raw tokens cannot be recovered later. Share or save now.
+                High-quality QR codes can only be saved/shared now at generation time. Links can be copied anytime from the list.
               </Text>
 
               <FlatList
@@ -265,7 +286,7 @@ export default function MobileCodesScreen() {
                       style={styles.qrImage}
                       resizeMode="contain"
                     />
-                    <Text style={styles.qrLabel}>{item.label || "Access Card"}</Text>
+                    <Text style={styles.qrLabel}>{item.label || "Access Code"}</Text>
                     <Text style={styles.qrUrl} numberOfLines={1}>
                       {item.url}
                     </Text>
@@ -376,6 +397,19 @@ const styles = StyleSheet.create({
   dateText: {
     fontSize: 10,
     color: "#777681",
+  },
+  linkButton: {
+    backgroundColor: "rgba(110, 60, 232, 0.15)",
+    borderWidth: 1,
+    borderColor: "rgba(110, 60, 232, 0.4)",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  linkText: {
+    color: "#C8A96B",
+    fontSize: 10,
+    fontWeight: "700",
   },
   revokeButton: {
     backgroundColor: "rgba(248, 113, 113, 0.15)",

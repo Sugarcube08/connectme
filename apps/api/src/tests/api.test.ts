@@ -198,7 +198,7 @@ describe("Core Operations: Code Generation, Atomic Single-Use Redemption & Concu
     const code = genRes.body.data;
     expect(code.url).toBe(`https://connectme.example.test/${code.token}`);
     expect(code.token).toBeDefined();
-    expect(code.token.length).toBe(43);
+    expect(code.token.length).toBe(16);
     expect(code.qrDataUrl.startsWith("data:image/png;base64,")).toBe(true);
 
     // Public eligibility check
@@ -366,20 +366,23 @@ describe("Core Operations: Code Generation, Atomic Single-Use Redemption & Concu
       .send({ label: "Second Admin Private Code" });
     expect(secondCodeRes.status).toBe(201);
     const secondCode = secondCodeRes.body.data;
-    expect(secondCode.token.length).toBe(43);
+    expect(secondCode.token.length).toBe(16);
     const storedSecondCode = await prisma.accessCode.findUnique({ where: { id: secondCode.id } });
     expect(storedSecondCode?.createdByAdminId).toBe(provisionRes.body.data.user.id);
     expect(storedSecondCode?.tokenHash).toMatch(/^hmac-sha256:/);
     expect(storedSecondCode?.tokenHash).not.toContain(secondCode.token);
     expect(storedSecondCode?.tokenHash).not.toBe(createHash("sha256").update(secondCode.token).digest("hex"));
-    expect(storedSecondCode?.encryptedToken).toBeTruthy();
-    expect(storedSecondCode?.encryptedToken).not.toContain(secondCode.token);
+    expect(storedSecondCode?.token).toBe(secondCode.token);
 
     const secondCodes = await request(app)
       .get("/api/v1/admin/codes")
       .set("Authorization", `Bearer ${secondAccessToken}`);
     expect(secondCodes.status).toBe(200);
-    expect(secondCodes.body.data.some((item: any) => item.id === secondCode.id)).toBe(true);
+    const retrievedSecondCode = secondCodes.body.data.find((item: any) => item.id === secondCode.id);
+    expect(retrievedSecondCode).toBeDefined();
+    // Link can be copied at anytime by owner
+    expect(retrievedSecondCode.token).toBe(secondCode.token);
+    expect(retrievedSecondCode.url).toBe(`https://connectme.example.test/${secondCode.token}`);
 
     const firstCodes = await request(app)
       .get("/api/v1/admin/codes")
@@ -387,22 +390,12 @@ describe("Core Operations: Code Generation, Atomic Single-Use Redemption & Concu
     expect(firstCodes.status).toBe(200);
     expect(firstCodes.body.data.some((item: any) => item.id === secondCode.id)).toBe(false);
 
-    const ownerPrintAssets = await request(app)
+    // Downloading anytime / print-assets endpoint has been removed
+    const removedPrintAssets = await request(app)
       .post("/api/v1/admin/codes/print-assets")
       .set("Authorization", `Bearer ${secondAccessToken}`)
       .send({ ids: [secondCode.id] });
-    expect(ownerPrintAssets.status).toBe(200);
-    expect(ownerPrintAssets.body.data.count).toBe(1);
-    expect(ownerPrintAssets.body.data.codes[0].token).toBe(secondCode.token);
-    expect(ownerPrintAssets.body.data.codes[0].url).toContain(secondCode.token);
-    expect(ownerPrintAssets.headers["cache-control"]).toContain("no-store");
-
-    // An administrator must not be able to decrypt/print another admin's code.
-    const foreignPrintAssets = await request(app)
-      .post("/api/v1/admin/codes/print-assets")
-      .set("Authorization", `Bearer ${adminToken}`)
-      .send({ ids: [secondCode.id] });
-    expect(foreignPrintAssets.status).toBe(404);
+    expect(removedPrintAssets.status).toBe(404);
 
     const firstCodeId = firstCodes.body.data[0].id as string;
     const forbiddenRevoke = await request(app)

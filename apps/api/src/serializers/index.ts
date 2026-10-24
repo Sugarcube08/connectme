@@ -36,21 +36,27 @@ export function serializeAdminUser(user: {
   };
 }
 
-export function serializeAccessCode(code: {
-  id: string;
-  label: string | null;
-  status: string;
-  createdAt: Date;
-  expiresAt: Date | null;
-  consumedAt: Date | null;
-  revokedAt: Date | null;
-  encryptedToken?: string | null;
-  submission?: { id: string; fullName: string } | null;
-}): AccessCodeItem {
+export function serializeAccessCode(
+  code: {
+    id: string;
+    label: string | null;
+    status: string;
+    createdAt: Date;
+    expiresAt: Date | null;
+    consumedAt: Date | null;
+    revokedAt: Date | null;
+    token?: string | null;
+    submission?: { id: string; fullName: string } | null;
+  },
+  publicOrigin?: string
+): AccessCodeItem {
   let effectiveStatus: CodeStatus = code.status as CodeStatus;
   if (effectiveStatus === "ACTIVE" && code.expiresAt && code.expiresAt < new Date()) {
     effectiveStatus = "EXPIRED";
   }
+
+  const token = code.token || null;
+  const url = token && publicOrigin ? `${publicOrigin.replace(/\/+$/, "")}/${token}` : null;
 
   return {
     id: code.id,
@@ -61,8 +67,10 @@ export function serializeAccessCode(code: {
     consumedAt: code.consumedAt ? code.consumedAt.toISOString() : null,
     revokedAt: code.revokedAt ? code.revokedAt.toISOString() : null,
     hasSubmission: !!code.submission,
-    canPrint: Boolean(code.encryptedToken) && effectiveStatus === "ACTIVE",
+    canPrint: false,
     contactName: code.submission?.fullName || null,
+    token,
+    url,
   };
 }
 

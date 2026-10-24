@@ -54,7 +54,6 @@ jobs:
           echo "SESSION_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
           echo "JWT_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
           echo "ACCESS_CODE_PEPPER=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
-          echo "ACCESS_CODE_ENCRYPTION_KEY=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
 
       - name: Install workspace dependencies
         run: pnpm install --frozen-lockfile
@@ -84,7 +83,6 @@ jobs:
           export SESSION_SECRET="$(openssl rand -hex 32)"
           export JWT_SECRET="$(openssl rand -hex 32)"
           export ACCESS_CODE_PEPPER="$(openssl rand -hex 32)"
-          export ACCESS_CODE_ENCRYPTION_KEY="$(openssl rand -hex 32)"
           export NEXT_PUBLIC_APP_URL=https://connectme.example.test
           docker compose config --quiet
 

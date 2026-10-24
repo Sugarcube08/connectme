@@ -23,7 +23,6 @@ router.post("/admins", validateBody(CreateAdminSchema), authController.createAdm
 
 router.get("/codes", codesController.list);
 router.post("/codes", codesController.create);
-router.post("/codes/print-assets", codesController.printAssets);
 router.post("/codes/bulk-revoke", codesController.bulkRevoke);
 router.post("/codes/:id/revoke", codesController.revoke);
 router.get("/codes/export", codesController.exportCsv);

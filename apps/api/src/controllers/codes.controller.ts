@@ -15,8 +15,9 @@ export class CodesController {
       const limit = parseInt((req.query.limit as string) || "20", 10);
       const status = (req.query.status as any) || undefined;
       const search = (req.query.search as string) || undefined;
+      const publicOrigin = await this.publicOriginService.resolve(req);
       const result = await this.tokenService.list({
-        adminUserId: req.adminUser!.id, page, limit, status, search,
+        adminUserId: req.adminUser!.id, page, limit, status, search, publicOrigin,
       });
       return res.status(200).json({
         success: true,
@@ -43,19 +44,6 @@ export class CodesController {
       }
       const code = await this.tokenService.createSingle(options);
       return res.status(201).json({ success: true, data: code });
-    } catch (err) { next(err); }
-  };
-
-  printAssets = async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const codes = await this.tokenService.getPrintAssets(
-        req.body?.ids,
-        req.adminUser!.id,
-        await this.publicOriginService.resolve(req)
-      );
-      res.setHeader("Cache-Control", "private, no-store, max-age=0");
-      res.setHeader("Pragma", "no-cache");
-      return res.status(200).json({ success: true, data: { count: codes.length, codes } });
     } catch (err) { next(err); }
   };
 

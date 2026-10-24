@@ -2,16 +2,16 @@ import { prisma, AccessCode, CodeStatus } from "@connectme/database";
 
 export class CodeRepository {
   async create(data: {
+    token: string;
     tokenHash: string;
-    encryptedToken: string;
     createdByAdminId: string;
     label?: string | null;
     expiresAt?: Date | null;
   }): Promise<AccessCode> {
     return prisma.accessCode.create({
       data: {
+        token: data.token,
         tokenHash: data.tokenHash,
-        encryptedToken: data.encryptedToken,
         createdByAdminId: data.createdByAdminId,
         label: data.label || null,
         expiresAt: data.expiresAt || null,
@@ -19,9 +19,47 @@ export class CodeRepository {
     });
   }
 
+  async createMany(items: Array<{
+    token: string;
+    tokenHash: string;
+    createdByAdminId: string;
+    label?: string | null;
+    expiresAt?: Date | null;
+  }>): Promise<number> {
+    const res = await prisma.accessCode.createMany({
+      data: items.map((item) => ({
+        token: item.token,
+        tokenHash: item.tokenHash,
+        createdByAdminId: item.createdByAdminId,
+        label: item.label || null,
+        expiresAt: item.expiresAt || null,
+      })),
+    });
+    return res.count;
+  }
+
+  async findByTokenOrHashes(token: string, tokenHashes: string[]) {
+    return prisma.accessCode.findFirst({
+      where: {
+        OR: [
+          { token },
+          { tokenHash: { in: tokenHashes } },
+        ],
+      },
+      include: { submission: { select: { id: true, fullName: true } } },
+    });
+  }
+
   async findByTokenHashes(tokenHashes: string[]) {
     return prisma.accessCode.findFirst({
       where: { tokenHash: { in: tokenHashes } },
+      include: { submission: { select: { id: true, fullName: true } } },
+    });
+  }
+
+  async findOwnedByTokens(tokens: string[], adminUserId: string) {
+    return prisma.accessCode.findMany({
+      where: { token: { in: tokens }, createdByAdminId: adminUserId },
       include: { submission: { select: { id: true, fullName: true } } },
     });
   }
