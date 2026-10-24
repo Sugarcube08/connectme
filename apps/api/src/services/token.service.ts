@@ -8,7 +8,7 @@ import { AccessCodeItem, GeneratedCodeDetail, CodeStatus } from "@connectme/cont
 const TOKEN_ALPHABET = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
 export class TokenService {
-  constructor(private codeRepo = new CodeRepository()) {}
+  constructor(private codeRepo = new CodeRepository()) { }
 
   generateToken(): string {
     // 16 alphanumeric characters (Base62) provides ~95 bits of entropy (62^16 combinations).
@@ -153,7 +153,7 @@ export class TokenService {
       codeId: code.id,
       requiresSmsNotice: isSmsConfigured,
       smsNotice: isSmsConfigured
-        ? "Be sure to enter correct number, because it's not editable and you'll receive my contact on the given number via sms only"
+        ? "Be sure to enter the correct number, because it's not editable and you'll receive my contact on the given number via SMS only."
         : undefined,
     };
   }
