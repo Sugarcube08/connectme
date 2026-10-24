@@ -61,7 +61,16 @@ export class SmsService {
         withDeliveryReport: true,
       };
 
-      const res = await fetch(endpoint, {
+      const fetchFn = (globalThis as unknown as {
+        fetch: (url: string, init?: unknown) => Promise<{
+          ok: boolean;
+          status: number;
+          text: () => Promise<string>;
+          json: () => Promise<unknown>;
+        }>;
+      }).fetch;
+
+      const res = await fetchFn(endpoint, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
