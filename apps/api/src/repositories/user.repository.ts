@@ -181,4 +181,43 @@ export class UserRepository {
       throw error;
     }
   }
+
+  async getSmsSettings(id: string) {
+    return prisma.adminUser.findUnique({
+      where: { id },
+      select: {
+        smsEnabled: true,
+        smsGatewayUrl: true,
+        smsGatewayUsername: true,
+        smsGatewayPassword: true,
+        smsTemplate: true,
+        smsSenderPhone: true,
+        smsSenderEmail: true,
+      },
+    });
+  }
+
+  async updateSmsSettings(id: string, data: {
+    smsEnabled: boolean;
+    smsGatewayUrl?: string | null;
+    smsGatewayUsername?: string | null;
+    smsGatewayPassword?: string | null;
+    smsTemplate?: string | null;
+    smsSenderPhone?: string | null;
+    smsSenderEmail?: string | null;
+  }) {
+    return prisma.adminUser.update({
+      where: { id },
+      data,
+      select: {
+        smsEnabled: true,
+        smsGatewayUrl: true,
+        smsGatewayUsername: true,
+        smsGatewayPassword: true,
+        smsTemplate: true,
+        smsSenderPhone: true,
+        smsSenderEmail: true,
+      },
+    });
+  }
 }

@@ -67,6 +67,34 @@ export const UpdateSettingsSchema = z.object({
   defaultExpiryDays: z.number().int().min(0).max(365).optional().nullable(),
 });
 
+export const UpdateAdminSmsSettingsSchema = z.object({
+  smsEnabled: z.boolean().default(false),
+  smsGatewayUrl: z
+    .string()
+    .trim()
+    .url("SMS Gateway URL must be a valid URL")
+    .optional()
+    .or(z.literal("")),
+  smsGatewayUsername: z.string().trim().max(100).optional().or(z.literal("")),
+  smsGatewayPassword: z.string().max(250).optional().or(z.literal("")),
+  smsTemplate: z.string().trim().max(1000).optional().or(z.literal("")),
+  smsSenderPhone: z.string().trim().max(50).optional().or(z.literal("")),
+  smsSenderEmail: z.string().trim().email("Invalid email address").max(150).optional().or(z.literal("")),
+}).refine(
+  (data) => {
+    if (data.smsGatewayUrl && data.smsGatewayUrl.length > 0) {
+      if (!data.smsGatewayUsername || data.smsGatewayUsername.length === 0) {
+        return false;
+      }
+    }
+    return true;
+  },
+  {
+    message: "SMS Gateway Username is required when Gateway URL is configured.",
+    path: ["smsGatewayUsername"],
+  }
+);
+
 export type ContactSubmissionInput = z.infer<typeof ContactSubmissionSchema>;
 export type AdminLoginInput = z.infer<typeof AdminLoginSchema>;
 export type CheckUsernameInput = z.infer<typeof CheckUsernameSchema>;
@@ -76,3 +104,4 @@ export type GenerateCodeInput = z.infer<typeof GenerateCodeSchema>;
 export type BatchGenerateCodeInput = z.infer<typeof BatchGenerateCodeSchema>;
 export type UpdateContactInput = z.infer<typeof UpdateContactSchema>;
 export type UpdateSettingsInput = z.infer<typeof UpdateSettingsSchema>;
+export type UpdateAdminSmsSettingsInput = z.infer<typeof UpdateAdminSmsSettingsSchema>;

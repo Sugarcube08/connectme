@@ -46,14 +46,38 @@ export class CodeRepository {
           { tokenHash: { in: tokenHashes } },
         ],
       },
-      include: { submission: { select: { id: true, fullName: true } } },
+      include: {
+        submission: { select: { id: true, fullName: true } },
+        createdByAdmin: {
+          select: {
+            id: true,
+            displayName: true,
+            smsEnabled: true,
+            smsGatewayUrl: true,
+            smsGatewayUsername: true,
+            smsGatewayPassword: true,
+          },
+        },
+      },
     });
   }
 
   async findByTokenHashes(tokenHashes: string[]) {
     return prisma.accessCode.findFirst({
       where: { tokenHash: { in: tokenHashes } },
-      include: { submission: { select: { id: true, fullName: true } } },
+      include: {
+        submission: { select: { id: true, fullName: true } },
+        createdByAdmin: {
+          select: {
+            id: true,
+            displayName: true,
+            smsEnabled: true,
+            smsGatewayUrl: true,
+            smsGatewayUsername: true,
+            smsGatewayPassword: true,
+          },
+        },
+      },
     });
   }
 

@@ -5,7 +5,7 @@ import { SettingsController } from "../controllers/settings.controller";
 import { AuthController } from "../controllers/auth.controller";
 import { requireAdmin } from "../middleware/auth.middleware";
 import { validateBody } from "../middleware/validate.middleware";
-import { CreateAdminSchema, UpdateContactSchema, UpdateSettingsSchema } from "@connectme/contracts";
+import { CreateAdminSchema, UpdateContactSchema, UpdateSettingsSchema, UpdateAdminSmsSettingsSchema } from "@connectme/contracts";
 
 const router = Router();
 const codesController = new CodesController();
@@ -36,5 +36,8 @@ router.get("/contacts/export", contactsController.exportCsv);
 
 router.get("/settings", settingsController.getSettings);
 router.patch("/settings", validateBody(UpdateSettingsSchema), settingsController.updateSettings);
+
+router.get("/settings/sms", settingsController.getAdminSmsSettings);
+router.patch("/settings/sms", validateBody(UpdateAdminSmsSettingsSchema), settingsController.updateAdminSmsSettings);
 
 export const adminRoutes = router;

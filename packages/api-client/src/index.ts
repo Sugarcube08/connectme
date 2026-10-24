@@ -14,8 +14,10 @@ import {
   GeneratedCodeDetail,
   ContactItem,
   AppSettings,
+  AdminSmsSettingsDTO,
   UpdateContactInput,
   UpdateSettingsInput,
+  UpdateAdminSmsSettingsInput,
 } from "@connectme/contracts";
 
 export interface ApiClientConfig {
@@ -288,6 +290,18 @@ export class ConnectMeApiClient {
   async updateSettings(input: UpdateSettingsInput): Promise<ApiResponse<AppSettings>> {
     return this.request("/admin/settings", {
       method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input),
+    });
+  }
+
+  async getAdminSmsSettings(): Promise<ApiResponse<AdminSmsSettingsDTO>> {
+    return this.request("/admin/settings/sms");
+  }
+
+  async updateAdminSmsSettings(input: UpdateAdminSmsSettingsInput): Promise<ApiResponse<AdminSmsSettingsDTO>> {
+    return this.request("/admin/settings/sms", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
     });
   }
 

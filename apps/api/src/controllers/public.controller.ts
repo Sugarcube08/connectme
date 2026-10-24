@@ -27,6 +27,8 @@ export class PublicController {
           eligible: result.eligible,
           codeStatus: result.status,
           brandName: settings.brandName,
+          requiresSmsNotice: result.requiresSmsNotice,
+          smsNotice: result.smsNotice,
           message: result.eligible
             ? "Access code is active and eligible."
             : `This access code is ${result.status.toLowerCase()}.`,

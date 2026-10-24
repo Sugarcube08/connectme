@@ -40,6 +40,15 @@ model AdminUser {
   accessCodes        AccessCode[]
   refreshTokens      AdminRefreshToken[]
 
+  // Per-admin SMS Gateway settings
+  smsEnabled         Boolean            @default(false) @map("sms_enabled")
+  smsGatewayUrl      String?            @map("sms_gateway_url") @db.VarChar(500)
+  smsGatewayUsername String?            @map("sms_gateway_username") @db.VarChar(191)
+  smsGatewayPassword String?            @map("sms_gateway_password") @db.Text
+  smsTemplate        String?            @map("sms_template") @db.Text
+  smsSenderPhone     String?            @map("sms_sender_phone") @db.VarChar(50)
+  smsSenderEmail     String?            @map("sms_sender_email") @db.VarChar(191)
+
   @@index([createdById])
   @@map("admin_users")
 }

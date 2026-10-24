@@ -128,6 +128,8 @@ export class TokenService {
     eligible: boolean;
     status: CodeStatus;
     codeId?: string;
+    requiresSmsNotice?: boolean;
+    smsNotice?: string;
   }> {
     const code = await this.codeRepo.findByTokenOrHashes(token, this.tokenHashCandidates(token));
     if (!code) return { eligible: false, status: "REVOKED" };
@@ -137,7 +139,23 @@ export class TokenService {
       effectiveStatus = "EXPIRED";
     }
 
-    return { eligible: effectiveStatus === "ACTIVE", status: effectiveStatus, codeId: code.id };
+    const admin = code.createdByAdmin;
+    const isSmsConfigured = Boolean(
+      admin?.smsEnabled &&
+      admin?.smsGatewayUrl &&
+      admin?.smsGatewayUsername &&
+      admin?.smsGatewayPassword
+    );
+
+    return {
+      eligible: effectiveStatus === "ACTIVE",
+      status: effectiveStatus,
+      codeId: code.id,
+      requiresSmsNotice: isSmsConfigured,
+      smsNotice: isSmsConfigured
+        ? "Be sure to enter correct number, because it's not editable and you'll receive my contact on the given number via sms only"
+        : undefined,
+    };
   }
 
   async revoke(id: string, adminUserId: string): Promise<boolean> {

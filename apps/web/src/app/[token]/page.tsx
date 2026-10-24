@@ -29,6 +29,8 @@ export default function PublicContactPage({ params }: PublicPageProps) {
     eligible: boolean;
     status: string;
     brandName?: string;
+    requiresSmsNotice?: boolean;
+    smsNotice?: string;
   } | null>(null);
 
   // Form states
@@ -71,6 +73,8 @@ export default function PublicContactPage({ params }: PublicPageProps) {
             eligible: res.data.eligible,
             status: res.data.codeStatus,
             brandName: res.data.brandName,
+            requiresSmsNotice: res.data.requiresSmsNotice,
+            smsNotice: res.data.smsNotice,
           });
         } else {
           setEligibility({
@@ -544,6 +548,15 @@ export default function PublicContactPage({ params }: PublicPageProps) {
                 placeholder="e.g. +1 555-0199 or Telegram/Signal"
                 className="w-full rounded-xl border border-obsidian-border bg-obsidian-elevated px-4 py-3 text-sm text-warmIvory placeholder-slate transition focus:border-royalViolet focus:outline-none focus:ring-1 focus:ring-royalViolet"
               />
+              {eligibility?.requiresSmsNotice && (
+                <div className="mt-2.5 flex items-start gap-2.5 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs leading-relaxed text-amber-200">
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
+                  <span>
+                    {eligibility.smsNotice ||
+                      "be sure to enter correct number, because it's not editable and you'll receive my contact on the given number via sms only"}
+                  </span>
+                </div>
+              )}
             </div>
 
             <div>

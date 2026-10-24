@@ -1,13 +1,16 @@
 import { prisma, type Prisma } from "@connectme/database";
 import { TokenService } from "./token.service";
 import { ImageService } from "./image.service";
+import { SmsService, DEFAULT_SMS_TEMPLATE, renderSmsTemplate } from "./sms.service";
+import { decryptPassword } from "../lib/sms-crypto";
 import { ContactSubmissionSchema, ContactSubmissionInput, SubmissionSuccessResponse } from "@connectme/contracts";
 import { ValidationError, NotFoundError, ConflictError, GoneError } from "../errors/app-error";
 
 export class RedemptionService {
   constructor(
     private tokenService = new TokenService(),
-    private imageService = new ImageService()
+    private imageService = new ImageService(),
+    private smsService = new SmsService()
   ) {}
 
   async redeem(options: {
@@ -33,7 +36,7 @@ export class RedemptionService {
         { tokenHash: { in: tokenHashes } },
       ],
     };
-    const submission = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    const { sub: submission, admin } = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const updated = await tx.accessCode.updateMany({
         where: {
           AND: [
@@ -54,7 +57,10 @@ export class RedemptionService {
         throw new ConflictError("This access code was just redeemed by another request.", "CONCURRENT_CONFLICT");
       }
 
-      const code = await tx.accessCode.findFirstOrThrow({ where: tokenFilter });
+      const code = await tx.accessCode.findFirstOrThrow({
+        where: tokenFilter,
+        include: { createdByAdmin: true },
+      });
       const sub = await tx.contactSubmission.create({
         data: {
           accessCodeId: code.id,
@@ -78,8 +84,45 @@ export class RedemptionService {
           },
         });
       }
-      return sub;
+      return { sub, admin: code.createdByAdmin };
     });
+
+    // Auto-trigger SMS via configured SMS Gateway if admin enabled it
+    if (
+      admin &&
+      admin.smsEnabled &&
+      admin.smsGatewayUrl &&
+      admin.smsGatewayUsername &&
+      admin.smsGatewayPassword
+    ) {
+      const password = decryptPassword(admin.smsGatewayPassword);
+      if (password) {
+        const template = admin.smsTemplate?.trim() || DEFAULT_SMS_TEMPLATE;
+        const message = renderSmsTemplate(template, {
+          fullName: cleanData.fullName,
+          phoneNumber: cleanData.phoneNumber,
+          email: cleanData.email,
+          organization: cleanData.organization,
+          role: cleanData.role,
+          adminName: admin.displayName || admin.username,
+          adminPhone: admin.smsSenderPhone || undefined,
+          adminEmail: admin.smsSenderEmail || undefined,
+        });
+
+        // Trigger asynchronously to not hold up or fail the visitor submission response
+        this.smsService
+          .sendContactSms({
+            gatewayUrl: admin.smsGatewayUrl,
+            username: admin.smsGatewayUsername,
+            password,
+            recipientPhone: cleanData.phoneNumber,
+            message,
+          })
+          .catch((err) => {
+            console.error("[RedemptionService] Failed to trigger SMS dispatch:", err);
+          });
+      }
+    }
 
     return {
       success: true,

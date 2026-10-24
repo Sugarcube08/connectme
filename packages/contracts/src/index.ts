@@ -91,11 +91,23 @@ export interface AppSettings {
   defaultExpiryDays: number | null;
 }
 
+export interface AdminSmsSettingsDTO {
+  smsEnabled: boolean;
+  smsGatewayUrl: string | null;
+  smsGatewayUsername: string | null;
+  hasPassword: boolean;
+  smsTemplate: string | null;
+  smsSenderPhone: string | null;
+  smsSenderEmail: string | null;
+}
+
 export interface PublicCodeVerificationResponse {
   eligible: boolean;
   codeStatus: CodeStatus;
   brandName?: string;
   message?: string;
+  requiresSmsNotice?: boolean;
+  smsNotice?: string;
 }
 
 export interface SubmissionSuccessResponse {
