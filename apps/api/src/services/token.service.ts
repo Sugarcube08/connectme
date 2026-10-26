@@ -1,5 +1,6 @@
 import { createHash, createHmac, randomBytes } from "node:crypto";
 import QRCode from "qrcode";
+import { prisma } from "@connectme/database";
 import { CodeRepository } from "../repositories/code.repository";
 import { config } from "../config/env";
 import { serializeAccessCode } from "../serializers";
@@ -157,7 +158,32 @@ export class TokenService {
       effectiveStatus = "EXPIRED";
     }
 
-    const admin = code.createdByAdmin;
+    let admin = code.createdByAdmin;
+    if (!admin) {
+      admin = (await prisma.adminUser.findFirst({
+        where: { isActive: true, smsEnabled: true },
+        select: {
+          id: true,
+          displayName: true,
+          smsEnabled: true,
+          smsGatewayUrl: true,
+          smsGatewayUsername: true,
+          smsGatewayPassword: true,
+        },
+      })) || (await prisma.adminUser.findFirst({
+        where: { isActive: true },
+        orderBy: { isInitialAdmin: "desc" },
+        select: {
+          id: true,
+          displayName: true,
+          smsEnabled: true,
+          smsGatewayUrl: true,
+          smsGatewayUsername: true,
+          smsGatewayPassword: true,
+        },
+      }));
+    }
+
     const hasConfiguredGatewayUrl = Boolean(admin?.smsGatewayUrl && admin.smsGatewayUrl.trim().length > 0);
     const isSmsConfigured = Boolean(
       admin?.smsEnabled &&

@@ -24,6 +24,12 @@ export class RedemptionService {
     }
     const cleanData = parsed.data;
 
+    // Normalize phone number to clean E.164 (+<digits>)
+    let cleanPhoneNumber = cleanData.phoneNumber.trim().replace(/[^\d+]/g, "");
+    if (!cleanPhoneNumber.startsWith("+")) {
+      cleanPhoneNumber = `+${cleanPhoneNumber}`;
+    }
+
     let processedImage: { buffer: Buffer; mime: string; size: number } | null = null;
     if (options.imageBuffer && options.imageBuffer.length > 0) {
       processedImage = await this.imageService.process(options.imageBuffer);
@@ -65,7 +71,7 @@ export class RedemptionService {
         data: {
           accessCodeId: code.id,
           fullName: cleanData.fullName,
-          phoneNumber: cleanData.phoneNumber,
+          phoneNumber: cleanPhoneNumber,
           email: cleanData.email || null,
           organization: cleanData.organization || null,
           role: cleanData.role || null,
@@ -84,44 +90,71 @@ export class RedemptionService {
           },
         });
       }
-      return { sub, admin: code.createdByAdmin };
+
+      let adminUser = code.createdByAdmin;
+      if (!adminUser) {
+        adminUser =
+          (await tx.adminUser.findFirst({
+            where: { isActive: true, smsEnabled: true },
+          })) ||
+          (await tx.adminUser.findFirst({
+            where: { isActive: true },
+            orderBy: { isInitialAdmin: "desc" },
+          }));
+      }
+
+      return { sub, admin: adminUser };
     });
 
     // Auto-trigger SMS via configured SMS Gateway if admin enabled it
-    if (
-      admin &&
-      admin.smsEnabled &&
-      admin.smsGatewayUrl &&
-      admin.smsGatewayUsername &&
-      admin.smsGatewayPassword
-    ) {
-      const password = decryptPassword(admin.smsGatewayPassword);
-      if (password) {
-        const template = admin.smsTemplate?.trim() || DEFAULT_SMS_TEMPLATE;
-        const message = renderSmsTemplate(template, {
-          fullName: cleanData.fullName,
-          phoneNumber: cleanData.phoneNumber,
-          email: cleanData.email,
-          organization: cleanData.organization,
-          role: cleanData.role,
-          adminName: admin.displayName || admin.username,
-          adminPhone: admin.smsSenderPhone || undefined,
-          adminEmail: admin.smsSenderEmail || undefined,
-        });
-
-        // Trigger asynchronously to not hold up or fail the visitor submission response
-        this.smsService
-          .sendContactSms({
-            gatewayUrl: admin.smsGatewayUrl,
-            username: admin.smsGatewayUsername,
-            password,
-            recipientPhone: cleanData.phoneNumber,
-            message,
-          })
-          .catch((err) => {
-            console.error("[RedemptionService] Failed to trigger SMS dispatch:", err);
+    if (admin) {
+      if (
+        admin.smsEnabled &&
+        admin.smsGatewayUrl &&
+        admin.smsGatewayUsername &&
+        admin.smsGatewayPassword
+      ) {
+        const password = decryptPassword(admin.smsGatewayPassword) || admin.smsGatewayPassword;
+        if (password) {
+          const template = admin.smsTemplate?.trim() || DEFAULT_SMS_TEMPLATE;
+          const message = renderSmsTemplate(template, {
+            fullName: cleanData.fullName,
+            phoneNumber: cleanPhoneNumber,
+            email: cleanData.email,
+            organization: cleanData.organization,
+            role: cleanData.role,
+            adminName: admin.displayName || admin.username,
+            adminPhone: admin.smsSenderPhone || undefined,
+            adminEmail: admin.smsSenderEmail || undefined,
           });
+
+          console.log(`[RedemptionService] Auto-triggering SMS to ${cleanPhoneNumber} via ${admin.smsGatewayUrl}...`);
+          this.smsService
+            .sendContactSms({
+              gatewayUrl: admin.smsGatewayUrl,
+              username: admin.smsGatewayUsername,
+              password,
+              recipientPhone: cleanPhoneNumber,
+              message,
+            })
+            .then((result) => {
+              if (result.success) {
+                console.log(`[RedemptionService] Auto-SMS enqueued successfully, id: ${result.messageId}`);
+              } else {
+                console.error(`[RedemptionService] Auto-SMS dispatch failed: ${result.error}`);
+              }
+            })
+            .catch((err) => {
+              console.error("[RedemptionService] Failed to trigger SMS dispatch:", err);
+            });
+        } else {
+          console.warn("[RedemptionService] SMS gateway password could not be decrypted or is empty.");
+        }
+      } else {
+        console.log(`[RedemptionService] SMS not enabled or missing credentials for admin ${admin.username} (smsEnabled=${admin.smsEnabled}, hasUrl=${Boolean(admin.smsGatewayUrl)})`);
       }
+    } else {
+      console.warn("[RedemptionService] No active admin found to associate with SMS dispatch.");
     }
 
     return {

@@ -34,10 +34,12 @@ export class SmsService {
     if (!url.endsWith("/messages") && !url.endsWith("/message")) {
       if (url.endsWith("/3rdparty/v1")) {
         url = `${url}/messages`;
+      } else if (url.endsWith("/api/3rdparty/v1")) {
+        url = `${url}/messages`;
       } else if (url.endsWith("/api")) {
         url = `${url}/3rdparty/v1/messages`;
       } else {
-        url = `${url}/api/3rdparty/v1/messages`;
+        url = `${url}/3rdparty/v1/messages`;
       }
     }
     return url;
@@ -54,12 +56,24 @@ export class SmsService {
       const endpoint = this.normalizeGatewayUrl(options.gatewayUrl);
       const auth = Buffer.from(`${options.username}:${options.password}`).toString("base64");
 
+      // Normalize phone to strict E.164 (+<digits>)
+      let cleanPhone = options.recipientPhone.trim().replace(/[^\d+]/g, "");
+      if (!cleanPhone.startsWith("+")) {
+        cleanPhone = `+${cleanPhone}`;
+      }
+
+      // Supports both standard SMS-Gate spec (textMessage.text) and legacy (message)
       const payload = {
         message: options.message,
-        phoneNumbers: [options.recipientPhone],
+        textMessage: {
+          text: options.message,
+        },
+        phoneNumbers: [cleanPhone],
         priority: 100, // Priority 100 bypasses queue wait and carrier throttle limits
         withDeliveryReport: true,
       };
+
+      console.log(`[SmsService] Dispatching auto-SMS to ${endpoint} for ${cleanPhone}...`);
 
       const fetchFn = (globalThis as unknown as {
         fetch: (url: string, init?: unknown) => Promise<{
@@ -85,8 +99,8 @@ export class SmsService {
         return { success: false, error: `Gateway status ${res.status}: ${errText}` };
       }
 
-      const data = (await res.json()) as { id?: string };
-      console.log(`[SmsService] Successfully enqueued SMS to ${options.recipientPhone}, id:`, data.id);
+      const data = (await res.json().catch(() => ({}))) as { id?: string };
+      console.log(`[SmsService] Successfully enqueued SMS to ${cleanPhone}, id:`, data.id || "enqueued");
       return { success: true, messageId: data.id };
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);

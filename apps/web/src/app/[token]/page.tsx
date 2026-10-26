@@ -15,6 +15,7 @@ import {
   Check,
 } from "lucide-react";
 import { apiClient } from "@/lib/api";
+import { PhoneInput } from "@/components/PhoneInput";
 
 interface PublicPageProps {
   params: Promise<{ token: string }>;
@@ -612,14 +613,13 @@ export default function PublicContactPage({ params }: PublicPageProps) {
               <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-warmIvory">
                 Phone Number <span className="text-royalViolet">*</span>
               </label>
-              <input
-                type="tel"
-                required
+              <PhoneInput
                 value={phoneNumber}
-                onChange={(e) => setPhoneNumber(e.target.value)}
+                onChange={(normalizedVal) => {
+                  setPhoneNumber(normalizedVal);
+                }}
                 onBlur={handleMandatoryFieldBlur}
-                placeholder="e.g. +1 555-0199"
-                className="w-full rounded-xl border border-obsidian-border bg-obsidian-elevated px-4 py-3 text-sm text-warmIvory placeholder-slate transition focus:border-royalViolet focus:outline-none focus:ring-1 focus:ring-royalViolet"
+                placeholder="62603 29127"
               />
               {eligibility?.requiresSmsNotice && (
                 <div className="mt-2.5 space-y-2">
