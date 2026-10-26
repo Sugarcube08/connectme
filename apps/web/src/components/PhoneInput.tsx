@@ -173,11 +173,10 @@ export function PhoneInput({
                         key={`${c.code}-${c.dialCode}`}
                         type="button"
                         onClick={() => handleCountrySelect(c)}
-                        className={`flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-xs transition ${
-                          isSelected
-                            ? "bg-royalViolet/20 text-warmIvory font-medium"
-                            : "text-warmIvory/80 hover:bg-obsidian-elevated hover:text-warmIvory"
-                        }`}
+                        className={`flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-xs transition ${isSelected
+                          ? "bg-royalViolet/20 text-warmIvory font-medium"
+                          : "text-warmIvory/80 hover:bg-obsidian-elevated hover:text-warmIvory"
+                          }`}
                       >
                         <div className="flex items-center gap-2.5 truncate">
                           <span className="text-base leading-none">{c.flag}</span>
@@ -205,7 +204,7 @@ export function PhoneInput({
             value={localNumber}
             onChange={handleInputChange}
             onBlur={onBlur}
-            placeholder={placeholder || (selectedCountry.code === "IN" ? "62603 29127" : "555-0199")}
+            placeholder={placeholder || (selectedCountry.code === "IN" ? "99999 99999" : "555-0199")}
             className="w-full rounded-r-xl bg-transparent px-4 py-3 text-sm text-warmIvory placeholder-slate focus:outline-none disabled:opacity-50"
           />
         </div>

@@ -74,7 +74,7 @@ export default function PublicContactPage({ params }: PublicPageProps) {
   const sendHeartbeat = async (url: string, isConfirmation = false) => {
     try {
       // 1. Direct browser fetch to wake up Render (mode: "no-cors" handles missing CORS headers safely)
-      fetch(url, { method: "GET", mode: "no-cors" }).catch(() => {});
+      fetch(url, { method: "GET", mode: "no-cors" }).catch(() => { });
 
       // 2. Server-verified heartbeat to inspect real readiness status
       const res = await apiClient.sendStartupHeartbeat(token);
@@ -459,7 +459,7 @@ export default function PublicContactPage({ params }: PublicPageProps) {
     // If SMS configured, ensure second confirmation heartbeat was dispatched
     if (smsConfigured && smsStartupHeartbeatUrl && !secondHeartbeatSentRef.current) {
       secondHeartbeatSentRef.current = true;
-      sendHeartbeat(smsStartupHeartbeatUrl, true).catch(() => {});
+      sendHeartbeat(smsStartupHeartbeatUrl, true).catch(() => { });
     }
 
     try {
@@ -619,7 +619,7 @@ export default function PublicContactPage({ params }: PublicPageProps) {
                   setPhoneNumber(normalizedVal);
                 }}
                 onBlur={handleMandatoryFieldBlur}
-                placeholder="62603 29127"
+                placeholder="99999 99999"
               />
               {eligibility?.requiresSmsNotice && (
                 <div className="mt-2.5 space-y-2">

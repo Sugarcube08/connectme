@@ -86,7 +86,7 @@ export function detectCountryFromInput(rawInput: string): { country: Country; lo
     }
   }
 
-  // Also check without the '+' if string starts with dial digits e.g. 916260329127
+  // Also check without the '+' if string starts with dial digits e.g. 919999999999
   const digitsOnly = trimmed.replace(/\D/g, "");
   for (const c of sorted) {
     const codeDigits = c.dialCode.replace(/\D/g, "");
@@ -135,13 +135,13 @@ export function normalizePhoneNumber(
   // 2. Strip non-digits
   let digits = trimmed.replace(/\D/g, "");
 
-  // 3. Strip leading trunk '0' if present (e.g. 06260329127 -> 6260329127)
+  // 3. Strip leading trunk '0' if present (e.g. 09999999999 -> 9999999999)
   const cleanDialCodeDigits = dialCode.replace(/\D/g, "");
   if (digits.startsWith("0")) {
     digits = digits.replace(/^0+/, "");
   }
 
-  // 4. If digits already start with the selected dial code digits (e.g. user entered 916260329127 with +91 selected)
+  // 4. If digits already start with the selected dial code digits (e.g. user entered 919999999999 with +91 selected)
   if (digits.startsWith(cleanDialCodeDigits) && digits.length > cleanDialCodeDigits.length + 5) {
     digits = digits.slice(cleanDialCodeDigits.length);
   }
