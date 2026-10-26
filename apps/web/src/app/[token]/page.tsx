@@ -631,12 +631,6 @@ export default function PublicContactPage({ params }: PublicPageProps) {
                     </span>
                   </div>
 
-                  {smsServiceReady === true && (
-                    <div className="flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-[11px] font-medium text-emerald-300">
-                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
-                      <span>SMS Service confirmed ready • Automatic dispatch active</span>
-                    </div>
-                  )}
 
                   {smsServiceReady === false && (
                     <div className="flex items-center gap-2 rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-[11px] text-amber-200/90">
