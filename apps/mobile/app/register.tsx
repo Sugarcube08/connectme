@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -26,6 +26,21 @@ export default function RegisterScreen() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // OTP Verification state (dynamically driven by server response)
+  const [otpStep, setOtpStep] = useState(false);
+  const [otp, setOtp] = useState("");
+  const [otpNotice, setOtpNotice] = useState<string | null>(null);
+  const [resending, setResending] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
+
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (resendCooldown > 0) {
+      timer = setTimeout(() => setResendCooldown((prev) => prev - 1), 1000);
+    }
+    return () => clearTimeout(timer);
+  }, [resendCooldown]);
 
   const handleRegister = async () => {
     setError(null);
@@ -63,6 +78,11 @@ export default function RegisterScreen() {
       return;
     }
 
+    if (otpStep && (!otp.trim() || otp.trim().length < 6)) {
+      setError("Please enter the 6-digit verification code sent to your email.");
+      return;
+    }
+
     setLoading(true);
     try {
       const res = await mobileApiClient.register({
@@ -70,19 +90,52 @@ export default function RegisterScreen() {
         email: cleanEmail,
         number: cleanNumber,
         password,
+        ...(otpStep ? { otp: otp.trim() } : {}),
       });
 
-      if (res.success && res.data.token && res.data.refreshToken) {
+      if (!res.success) {
+        setError(res.error.message || "Registration failed. Please check your details.");
+        return;
+      }
+
+      // If backend indicates OTP verification is required
+      if (res.data.requiresOtp) {
+        setOtpStep(true);
+        setOtpNotice(res.data.message || `A verification code was sent to ${cleanEmail}.`);
+        setResendCooldown(30);
+        return;
+      }
+
+      if (res.data.token && res.data.refreshToken) {
         await saveAuthTokens(res.data.token, res.data.refreshToken);
         router.replace("/(tabs)");
       } else {
-        setError(!res.success ? res.error.message : "Registration response did not include required session tokens.");
+        setError("Registration response did not include required session tokens.");
       }
     } catch (err: any) {
       console.error("[Register] Network failure:", err);
       setError(`Network error connecting to backend: ${err?.message || "Check connection"}`);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleResendOtp = async () => {
+    if (resendCooldown > 0 || resending) return;
+    setError(null);
+    setResending(true);
+    try {
+      const res = await mobileApiClient.resendOtp(email.trim().toLowerCase());
+      if (res.success) {
+        setOtpNotice(res.data.message || "A fresh verification code has been sent.");
+        setResendCooldown(30);
+      } else {
+        setError(res.error.message || "Failed to resend code.");
+      }
+    } catch (err: any) {
+      setError(`Network error: ${err?.message || "Check connection"}`);
+    } finally {
+      setResending(false);
     }
   };
 
@@ -96,7 +149,9 @@ export default function RegisterScreen() {
           {/* Top Brand Badge */}
           <View style={styles.badge}>
             <SparklesIcon size={12} color={Theme.colors.gold} />
-            <Text style={styles.badgeText}>ADMINISTRATOR REGISTRATION</Text>
+            <Text style={styles.badgeText}>
+              {otpStep ? "SECURITY VERIFICATION" : "ADMINISTRATOR REGISTRATION"}
+            </Text>
           </View>
 
           {/* Title */}
@@ -105,23 +160,34 @@ export default function RegisterScreen() {
           </Text>
           <Text style={styles.tagline}>“You share. We connect.”</Text>
           <Text style={styles.subtitle}>
-            Create your account to start generating codes and collecting attendee leads
+            {otpStep
+              ? `Enter the 6-digit code sent to ${email.trim()}`
+              : "Create your account to start generating codes and collecting attendee leads"}
           </Text>
 
-          {/* Tab Switcher: Sign In | Register */}
-          <View style={styles.tabSwitcher}>
-            <TouchableOpacity
-              style={styles.tabButton}
-              onPress={() => router.push("/login")}
-            >
-              <Text style={styles.tabButtonText}>Sign In</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.tabButton, styles.tabButtonActive]}>
-              <Text style={[styles.tabButtonText, styles.tabButtonTextActive]}>
-                Create Account
-              </Text>
-            </TouchableOpacity>
-          </View>
+          {!otpStep && (
+            /* Tab Switcher: Sign In | Register */
+            <View style={styles.tabSwitcher}>
+              <TouchableOpacity
+                style={styles.tabButton}
+                onPress={() => router.push("/login")}
+              >
+                <Text style={styles.tabButtonText}>Sign In</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.tabButton, styles.tabButtonActive]}>
+                <Text style={[styles.tabButtonText, styles.tabButtonTextActive]}>
+                  Create Account
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* Success / OTP Notice */}
+          {otpNotice && otpStep && (
+            <View style={styles.noticeBox}>
+              <Text style={styles.noticeText}>{otpNotice}</Text>
+            </View>
+          )}
 
           {/* Error Message */}
           {error && (
@@ -130,96 +196,167 @@ export default function RegisterScreen() {
             </View>
           )}
 
-          {/* Name Field */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>YOUR FULL NAME</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="e.g. Harsh Raikwar"
-              placeholderTextColor={Theme.colors.textMuted}
-              value={name}
-              onChangeText={setName}
-            />
-          </View>
+          {otpStep ? (
+            /* OTP Input Form */
+            <View>
+              <View style={styles.inputGroup}>
+                <View style={styles.labelRow}>
+                  <Text style={styles.label}>6-DIGIT VERIFICATION CODE</Text>
+                  <TouchableOpacity
+                    onPress={() => {
+                      setOtpStep(false);
+                      setError(null);
+                    }}
+                  >
+                    <Text style={styles.editLink}>Edit Details</Text>
+                  </TouchableOpacity>
+                </View>
 
-          {/* Email Address */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>EMAIL ADDRESS</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="e.g. harsh@example.com"
-              placeholderTextColor={Theme.colors.textMuted}
-              value={email}
-              onChangeText={setEmail}
-              autoCapitalize="none"
-              autoCorrect={false}
-              keyboardType="email-address"
-            />
-          </View>
-
-          {/* Phone Number */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>PHONE NUMBER</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="e.g. +91 62603 29127"
-              placeholderTextColor={Theme.colors.textMuted}
-              value={number}
-              onChangeText={setNumber}
-              keyboardType="phone-pad"
-            />
-          </View>
-
-          {/* Password */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>PASSWORD</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Min 8 chars, 1 uppercase, 1 number"
-              placeholderTextColor={Theme.colors.textMuted}
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-            />
-          </View>
-
-          {/* Confirm Password */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>CONFIRM PASSWORD</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Re-enter password"
-              placeholderTextColor={Theme.colors.textMuted}
-              value={confirmPassword}
-              onChangeText={setConfirmPassword}
-              secureTextEntry
-            />
-          </View>
-
-          {/* Submit Button */}
-          <TouchableOpacity
-            style={[styles.button, loading && styles.buttonDisabled]}
-            onPress={handleRegister}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color="#FFFFFF" size="small" />
-            ) : (
-              <View style={styles.buttonContent}>
-                <Text style={styles.buttonText}>Create Administrator Account</Text>
+                <TextInput
+                  style={styles.otpInput}
+                  placeholder="123456"
+                  placeholderTextColor={Theme.colors.textMuted}
+                  value={otp}
+                  onChangeText={(val) => setOtp(val.replace(/[^0-9]/g, "").slice(0, 6))}
+                  keyboardType="number-pad"
+                  maxLength={6}
+                  autoFocus
+                />
               </View>
-            )}
-          </TouchableOpacity>
 
-          {/* Bottom Switch Link */}
-          <TouchableOpacity
-            style={styles.switchLink}
-            onPress={() => router.push("/login")}
-          >
-            <Text style={styles.switchLinkText}>
-              Already have an account? <Text style={styles.goldLink}>Sign in here →</Text>
-            </Text>
-          </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.button, (loading || otp.length < 6) && styles.buttonDisabled]}
+                onPress={handleRegister}
+                disabled={loading || otp.length < 6}
+              >
+                {loading ? (
+                  <ActivityIndicator color="#FFFFFF" size="small" />
+                ) : (
+                  <View style={styles.buttonContent}>
+                    <Text style={styles.buttonText}>Verify &amp; Activate Account</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+
+              <View style={styles.otpActionRow}>
+                <TouchableOpacity
+                  onPress={handleResendOtp}
+                  disabled={resending || resendCooldown > 0}
+                >
+                  <Text style={[styles.resendText, (resending || resendCooldown > 0) && { opacity: 0.5 }]}>
+                    {resendCooldown > 0
+                      ? `Resend code in ${resendCooldown}s`
+                      : resending
+                      ? "Sending..."
+                      : "Resend Code"}
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={() => {
+                    setOtpStep(false);
+                    setError(null);
+                  }}
+                >
+                  <Text style={styles.cancelText}>Cancel</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : (
+            /* Standard Registration Form */
+            <View>
+              {/* Name Field */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>YOUR FULL NAME</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="e.g. Harsh Raikwar"
+                  placeholderTextColor={Theme.colors.textMuted}
+                  value={name}
+                  onChangeText={setName}
+                />
+              </View>
+
+              {/* Email Address */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>EMAIL ADDRESS</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="e.g. harsh@example.com"
+                  placeholderTextColor={Theme.colors.textMuted}
+                  value={email}
+                  onChangeText={setEmail}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="email-address"
+                />
+              </View>
+
+              {/* Phone Number */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>PHONE NUMBER</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="e.g. +91 62603 29127"
+                  placeholderTextColor={Theme.colors.textMuted}
+                  value={number}
+                  onChangeText={setNumber}
+                  keyboardType="phone-pad"
+                />
+              </View>
+
+              {/* Password */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>PASSWORD</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Min 8 chars, 1 uppercase, 1 number"
+                  placeholderTextColor={Theme.colors.textMuted}
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry
+                />
+              </View>
+
+              {/* Confirm Password */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>CONFIRM PASSWORD</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Re-enter password"
+                  placeholderTextColor={Theme.colors.textMuted}
+                  value={confirmPassword}
+                  onChangeText={setConfirmPassword}
+                  secureTextEntry
+                />
+              </View>
+
+              {/* Submit Button */}
+              <TouchableOpacity
+                style={[styles.button, loading && styles.buttonDisabled]}
+                onPress={handleRegister}
+                disabled={loading}
+              >
+                {loading ? (
+                  <ActivityIndicator color="#FFFFFF" size="small" />
+                ) : (
+                  <View style={styles.buttonContent}>
+                    <Text style={styles.buttonText}>Create Administrator Account</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+
+              {/* Bottom Switch Link */}
+              <TouchableOpacity
+                style={styles.switchLink}
+                onPress={() => router.push("/login")}
+              >
+                <Text style={styles.switchLinkText}>
+                  Already have an account? <Text style={styles.goldLink}>Sign in here →</Text>
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
 
           {/* Footer Security Note */}
           <View style={styles.footerNote}>
@@ -335,6 +472,19 @@ const styles = StyleSheet.create({
     color: Theme.colors.gold,
     fontWeight: "700",
   },
+  noticeBox: {
+    backgroundColor: "rgba(124, 58, 237, 0.12)",
+    borderColor: "rgba(124, 58, 237, 0.3)",
+    borderWidth: 1,
+    padding: 12,
+    borderRadius: Theme.radius.md,
+    marginBottom: 16,
+  },
+  noticeText: {
+    color: "#D8B4FE",
+    fontSize: 12,
+    lineHeight: 17,
+  },
   errorBox: {
     backgroundColor: Theme.colors.errorBg,
     borderColor: Theme.colors.errorBorder,
@@ -352,12 +502,22 @@ const styles = StyleSheet.create({
   inputGroup: {
     marginBottom: 14,
   },
+  labelRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 6,
+  },
   label: {
     fontSize: 10,
     fontWeight: "800",
     color: Theme.colors.textSecondary,
-    marginBottom: 6,
     letterSpacing: 0.8,
+  },
+  editLink: {
+    fontSize: 11,
+    color: Theme.colors.gold,
+    fontWeight: "600",
   },
   input: {
     backgroundColor: Theme.colors.surfaceElevated,
@@ -368,6 +528,35 @@ const styles = StyleSheet.create({
     paddingVertical: 11,
     color: Theme.colors.textPrimary,
     fontSize: 14,
+  },
+  otpInput: {
+    backgroundColor: Theme.colors.surfaceElevated,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+    borderRadius: Theme.radius.md,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    color: Theme.colors.gold,
+    fontSize: 24,
+    fontWeight: "800",
+    letterSpacing: 8,
+    textAlign: "center",
+    fontFamily: Platform.OS === "ios" ? "Courier" : "monospace",
+  },
+  otpActionRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 16,
+  },
+  resendText: {
+    color: Theme.colors.gold,
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  cancelText: {
+    color: Theme.colors.textMuted,
+    fontSize: 12,
   },
   button: {
     backgroundColor: Theme.colors.primary,

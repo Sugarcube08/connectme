@@ -5,6 +5,8 @@ import { SignJWT, jwtVerify } from "jose";
 import { UserRepository } from "../repositories/user.repository";
 import { config } from "../config/env";
 import { serializeAdminUser } from "../serializers";
+import { EmailService } from "./email.service";
+import { OtpRepository } from "../repositories/otp.repository";
 import {
   AdminLoginInput,
   RegisterInput,
@@ -19,6 +21,7 @@ import {
   ValidationError,
   ForbiddenError,
   ConflictError,
+  OtpError,
   GoneError,
 } from "../errors/app-error";
 
@@ -31,11 +34,19 @@ type AuthSessionResult = {
   refreshToken: string;
 };
 
+export type RegisterResult =
+  | AuthSessionResult
+  | { requiresOtp: true; email: string; message: string };
+
 export class AuthService {
   private sessionSecret = new TextEncoder().encode(config.SESSION_SECRET);
   private jwtSecret = new TextEncoder().encode(config.JWT_SECRET);
 
-  constructor(private userRepo = new UserRepository()) {}
+  constructor(
+    private userRepo = new UserRepository(),
+    private emailService = new EmailService(),
+    private otpRepo = new OtpRepository()
+  ) {}
 
   async checkUsername(rawUsername: string): Promise<CheckUsernameDTO> {
     const username = rawUsername.trim().toLowerCase();
@@ -149,11 +160,39 @@ export class AuthService {
     return this.createAuthSession(serializeAdminUser(activatedUser));
   }
 
-  async register(input: RegisterInput): Promise<AuthSessionResult> {
+  async register(input: RegisterInput): Promise<RegisterResult> {
     const email = input.email.trim().toLowerCase();
     const existing = await this.userRepo.findByEmail(email);
     if (existing) {
       throw new ConflictError("An account with this email address already exists. Please sign in.", "EMAIL_ALREADY_EXISTS");
+    }
+
+    const isOtpRequired = this.emailService.isOtpVerificationEnabled();
+
+    // If OTP verification pipeline is active on the server
+    if (isOtpRequired) {
+      if (!input.otp) {
+        // Step 1: User requested registration without OTP -> Generate OTP and send email
+        const otp = this.emailService.generateOtp();
+        await this.otpRepo.createOtp(email, otp, 10);
+        await this.emailService.sendOtpEmail({
+          to: email,
+          otp,
+          recipientName: input.name.trim(),
+        });
+
+        return {
+          requiresOtp: true,
+          email,
+          message: "A 6-digit verification code has been sent to your email address.",
+        };
+      }
+
+      // Step 2: User submitted registration with OTP -> Verify OTP
+      const isValid = await this.otpRepo.verifyOtp(email, input.otp);
+      if (!isValid) {
+        throw new OtpError("Invalid or expired verification code. Please request a new code.", "INVALID_OTP");
+      }
     }
 
     // Determine or generate unique username
@@ -189,6 +228,29 @@ export class AuthService {
     return this.createAuthSession(serializeAdminUser(user));
   }
 
+  async resendOtp(rawEmail: string): Promise<{ message: string }> {
+    const email = rawEmail.trim().toLowerCase();
+    const existing = await this.userRepo.findByEmail(email);
+    if (existing) {
+      throw new ConflictError("An account with this email address already exists. Please sign in.", "EMAIL_ALREADY_EXISTS");
+    }
+
+    if (!this.emailService.isOtpVerificationEnabled()) {
+      throw new ValidationError("OTP verification is not active on this server.", "OTP_NOT_ACTIVE");
+    }
+
+    const otp = this.emailService.generateOtp();
+    await this.otpRepo.createOtp(email, otp, 10);
+    await this.emailService.sendOtpEmail({
+      to: email,
+      otp,
+    });
+
+    return {
+      message: "A new verification code has been dispatched to your email address.",
+    };
+  }
+
   async login(input: AdminLoginInput): Promise<AuthSessionResult> {
     const user = await this.userRepo.findByUsernameOrEmail(input.username);
     if (!user || !user.isActive || !user.passwordHash || user.isBootstrapPending) {
@@ -206,29 +268,11 @@ export class AuthService {
     return { user, token, webSession, refreshToken };
   }
 
-  async createAdmin(actingAdminId: string, input: CreateAdminInput): Promise<AdminUserDTO> {
-    const actor = await this.userRepo.findById(actingAdminId);
-    if (!actor?.isActive) {
-      throw new ForbiddenError("Only active administrators can provision additional admin accounts.", "ADMIN_PROVISIONING_FORBIDDEN");
-    }
-    const username = input.username.trim().toLowerCase();
-    if (!/^[a-z0-9][a-z0-9._-]{2,31}$/.test(username)) {
-      throw new ValidationError("Username must be 3–32 characters and use only letters, numbers, dots, underscores, or hyphens.");
-    }
-    try {
-      const user = await this.userRepo.createAdmin({
-        username,
-        displayName: input.displayName,
-        passwordHash: await bcrypt.hash(input.password, 12),
-        createdById: actingAdminId,
-      });
-      return serializeAdminUser(user);
-    } catch (error) {
-      if (typeof error === "object" && error !== null && "code" in error && error.code === "P2002") {
-        throw new ValidationError("That username is unavailable. Choose another username.");
-      }
-      throw error;
-    }
+  async createAdmin(_actingAdminId: string, _input: CreateAdminInput): Promise<AdminUserDTO> {
+    throw new ForbiddenError(
+      "Admin creation by existing administrators has been decommissioned. New administrators must register independently through the public registration portal.",
+      "ADMIN_CREATION_DISABLED"
+    );
   }
 
   async listAdmins(): Promise<AdminUserDTO[]> {

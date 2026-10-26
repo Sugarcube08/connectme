@@ -121,8 +121,9 @@ describe("Direct Initial Admin Setup & Multi-Admin Creator Tracking", () => {
     expect(res.body.error.code).toBe("BOOTSTRAP_ALREADY_COMPLETED");
   });
 
-  it("initial admin can provision second admin and tracks createdById", async () => {
-    const res = await request(app)
+  it("POST /admin/admins is decommissioned (returns 404) and new admins register independently", async () => {
+    // Attempting old decommissioned endpoint returns 404
+    const oldEndpointRes = await request(app)
       .post("/api/v1/admin/admins")
       .set("Cookie", initialAdminSessionCookie)
       .send({
@@ -130,11 +131,22 @@ describe("Direct Initial Admin Setup & Multi-Admin Creator Tracking", () => {
         displayName: "Second Admin",
         password: secondAdminPassword,
       });
+    expect(oldEndpointRes.status).toBe(404);
+
+    // Independent registration
+    const res = await request(app)
+      .post("/api/v1/auth/register")
+      .send({
+        name: "Second Admin",
+        username: secondAdminUsername,
+        email: `${secondAdminUsername}@example.com`,
+        number: "+91 98765 43210",
+        password: secondAdminPassword,
+      });
 
     expect(res.status).toBe(201);
     expect(res.body.success).toBe(true);
     expect(res.body.data.user.username).toBe(secondAdminUsername);
-    expect(res.body.data.user.createdById).toBe(initialAdminId);
     secondAdminId = res.body.data.user.id;
 
     // Login as second admin
@@ -152,21 +164,20 @@ describe("Direct Initial Admin Setup & Multi-Admin Creator Tracking", () => {
     secondAdminSessionCookie = sessionCookie!.split(";")[0];
   });
 
-  it("second admin (non-initial) CAN provision a third admin and tracks createdById = secondAdminId", async () => {
+  it("third admin can register independently and login", async () => {
     const res = await request(app)
-      .post("/api/v1/admin/admins")
-      .set("Cookie", secondAdminSessionCookie)
+      .post("/api/v1/auth/register")
       .send({
+        name: "Third Admin",
         username: thirdAdminUsername,
-        displayName: "Third Admin",
+        email: `${thirdAdminUsername}@example.com`,
+        number: "+91 98765 43211",
         password: thirdAdminPassword,
       });
 
     expect(res.status).toBe(201);
     expect(res.body.success).toBe(true);
     expect(res.body.data.user.username).toBe(thirdAdminUsername);
-    expect(res.body.data.user.createdById).toBe(secondAdminId);
-    expect(res.body.data.user.createdBy?.username).toBe(secondAdminUsername);
   });
 
   it("GET /admin/admins returns all admins with full creator records", async () => {
@@ -188,11 +199,9 @@ describe("Direct Initial Admin Setup & Multi-Admin Creator Tracking", () => {
     expect(admin1.createdBy).toBeNull();
 
     expect(admin2.isInitialAdmin).toBeFalsy();
-    expect(admin2.createdById).toBe(initialAdminId);
-    expect(admin2.createdBy.username).toBe(initialAdminUsername);
+    expect(admin2.username).toBe(secondAdminUsername);
 
     expect(admin3.isInitialAdmin).toBeFalsy();
-    expect(admin3.createdById).toBe(secondAdminId);
-    expect(admin3.createdBy.username).toBe(secondAdminUsername);
+    expect(admin3.username).toBe(thirdAdminUsername);
   });
 });

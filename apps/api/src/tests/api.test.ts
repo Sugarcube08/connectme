@@ -322,9 +322,14 @@ describe("Core Operations: Code Generation, Atomic Single-Use Redemption & Concu
     const secondPassword = `${randomBytes(18).toString("base64url")}A1`;
 
     const provisionRes = await request(app)
-      .post("/api/v1/admin/admins")
-      .set("Authorization", `Bearer ${adminToken}`)
-      .send({ username: secondUsername, displayName: "Second Admin", password: secondPassword });
+      .post("/api/v1/auth/register")
+      .send({
+        name: "Second Admin",
+        username: secondUsername,
+        email: `${secondUsername}@example.com`,
+        number: "+91 98765 43210",
+        password: secondPassword,
+      });
     expect(provisionRes.status).toBe(201);
     expect(provisionRes.body.data.user.username).toBe(secondUsername);
 

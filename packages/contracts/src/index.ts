@@ -24,6 +24,15 @@ export interface AdminUserDTO {
   } | null;
 }
 
+export interface RegisterResponseData {
+  user?: AdminUserDTO;
+  accessToken?: string;
+  refreshToken?: string;
+  requiresOtp?: boolean;
+  email?: string;
+  message?: string;
+}
+
 export interface CheckUsernameDTO {
   exists: boolean;
   isInitialAdmin?: boolean;

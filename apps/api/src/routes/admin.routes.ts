@@ -5,7 +5,7 @@ import { SettingsController } from "../controllers/settings.controller";
 import { AuthController } from "../controllers/auth.controller";
 import { requireAdmin } from "../middleware/auth.middleware";
 import { validateBody } from "../middleware/validate.middleware";
-import { CreateAdminSchema, UpdateContactSchema, UpdateSettingsSchema, UpdateAdminSmsSettingsSchema } from "@connectme/contracts";
+import { UpdateContactSchema, UpdateSettingsSchema, UpdateAdminSmsSettingsSchema } from "@connectme/contracts";
 
 const router = Router();
 const codesController = new CodesController();
@@ -17,9 +17,8 @@ router.use(requireAdmin);
 
 router.get("/dashboard", contactsController.getDashboard);
 
-// Additional administrators can be provisioned by any administrator.
+// List of administrators for the team directory
 router.get("/admins", authController.listAdmins);
-router.post("/admins", validateBody(CreateAdminSchema), authController.createAdmin);
 
 router.get("/codes", codesController.list);
 router.post("/codes", codesController.create);

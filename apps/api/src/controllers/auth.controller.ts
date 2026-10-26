@@ -44,7 +44,27 @@ export class AuthController {
   register = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const result = await this.authService.register(req.body);
-      return this.authResponse(req, res, result, 201);
+      if ("requiresOtp" in result && result.requiresOtp) {
+        return res.status(200).json({
+          success: true,
+          data: {
+            requiresOtp: true,
+            email: result.email,
+            message: result.message,
+          },
+        });
+      }
+      return this.authResponse(req, res, result as any, 201);
+    } catch (err) { next(err); }
+  };
+
+  resendOtp = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const result = await this.authService.resendOtp(req.body.email);
+      return res.status(200).json({
+        success: true,
+        data: result,
+      });
     } catch (err) { next(err); }
   };
 

@@ -56,11 +56,26 @@ export const RegisterSchema = z
       .max(128)
       .regex(/[A-Z]/, "Password must contain at least one uppercase letter")
       .regex(/[0-9]/, "Password must contain at least one number"),
+    otp: z
+      .string()
+      .trim()
+      .min(4)
+      .max(10)
+      .optional(),
   })
   .refine((data) => Boolean((data.number && data.number.length >= 5) || (data.phoneNumber && data.phoneNumber.length >= 5)), {
     message: "Phone number is required",
     path: ["number"],
   });
+
+export const ResendOtpSchema = z.object({
+  email: z.string().trim().email("Invalid email address"),
+});
+
+export const VerifyOtpSchema = z.object({
+  email: z.string().trim().email("Invalid email address"),
+  otp: z.string().trim().min(4, "OTP code is required").max(10),
+});
 
 export const AdminLoginSchema = z.object({
   username: z.string().trim().min(1, "Username or email is required"),
@@ -140,6 +155,8 @@ export const UpdateAdminSmsSettingsSchema = z.object({
 
 export type ContactSubmissionInput = z.infer<typeof ContactSubmissionSchema>;
 export type RegisterInput = z.infer<typeof RegisterSchema>;
+export type ResendOtpInput = z.infer<typeof ResendOtpSchema>;
+export type VerifyOtpInput = z.infer<typeof VerifyOtpSchema>;
 export type AdminLoginInput = z.infer<typeof AdminLoginSchema>;
 export type CheckUsernameInput = z.infer<typeof CheckUsernameSchema>;
 export type CreateAdminInput = z.infer<typeof CreateAdminSchema>;

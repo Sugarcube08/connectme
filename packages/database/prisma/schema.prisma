@@ -129,3 +129,16 @@ model AppSetting {
 
   @@map("app_settings")
 }
+
+model EmailOtp {
+  id        String   @id @default(uuid())
+  email     String   @db.VarChar(191)
+  otpHash   String   @map("otp_hash") @db.VarChar(191)
+  expiresAt DateTime @map("expires_at")
+  consumed  Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([email, consumed, expiresAt])
+  @@map("email_otps")
+}
+

@@ -40,6 +40,12 @@ export class ConflictError extends AppError {
   }
 }
 
+export class OtpError extends AppError {
+  constructor(message = "Invalid or expired verification code", code = "INVALID_OTP") {
+    super(code, message, 400);
+  }
+}
+
 export class GoneError extends AppError {
   constructor(message = "Resource expired or revoked", code = "RESOURCE_GONE") {
     super(code, message, 410);

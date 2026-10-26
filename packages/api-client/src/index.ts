@@ -4,6 +4,7 @@ import {
   SubmissionSuccessResponse,
   ContactSubmissionInput,
   RegisterInput,
+  RegisterResponseData,
   AdminLoginInput,
   BootstrapSetupInput,
   BootstrapStatusDTO,
@@ -200,11 +201,19 @@ export class ConnectMeApiClient {
     });
   }
 
-  async register(input: RegisterInput): Promise<ApiResponse<{ user: AdminUserDTO; token?: string; refreshToken?: string }>> {
+  async register(input: RegisterInput): Promise<ApiResponse<RegisterResponseData & { token?: string }>> {
     return this.request("/auth/register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(input),
+    });
+  }
+
+  async resendOtp(email: string): Promise<ApiResponse<{ message: string }>> {
+    return this.request("/auth/resend-otp", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
     });
   }
 

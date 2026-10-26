@@ -1,19 +1,19 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import Link from "next/link";
 import {
   ShieldCheck,
   UserCheck,
-  UserPlus,
   Crown,
   Sparkles,
   AlertCircle,
   CheckCircle2,
   Calendar,
   User,
-  Lock,
-  X,
   Search,
+  Copy,
+  ExternalLink,
 } from "lucide-react";
 import { AdminUserDTO } from "@connectme/contracts";
 import { apiClient } from "@/lib/api";
@@ -23,16 +23,7 @@ export default function AdminTeamPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
-
-  // Modal State
-  const [modalOpen, setModalOpen] = useState(false);
-  const [newUsername, setNewUsername] = useState("");
-  const [newDisplayName, setNewDisplayName] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [newConfirmPassword, setNewConfirmPassword] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [modalError, setModalError] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [copiedLink, setCopiedLink] = useState(false);
 
   const fetchAdmins = async () => {
     try {
@@ -54,55 +45,11 @@ export default function AdminTeamPage() {
     fetchAdmins();
   }, []);
 
-  const handleCreateAdmin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setModalError(null);
-
-    const username = newUsername.trim().toLowerCase();
-    if (!/^[a-z0-9][a-z0-9._-]{2,31}$/.test(username)) {
-      setModalError("Username must be 3–32 characters and contain only letters, numbers, dots, hyphens, or underscores.");
-      return;
-    }
-
-    if (newPassword !== newConfirmPassword) {
-      setModalError("Passwords do not match.");
-      return;
-    }
-
-    if (newPassword.length < 8) {
-      setModalError("Password must be at least 8 characters long.");
-      return;
-    }
-
-    if (!/[A-Z]/.test(newPassword) || !/[0-9]/.test(newPassword)) {
-      setModalError("Password must contain at least one uppercase letter and one number.");
-      return;
-    }
-
-    try {
-      setSubmitting(true);
-      const res = await apiClient.createAdmin({
-        username,
-        displayName: newDisplayName.trim() || undefined,
-        password: newPassword,
-      });
-
-      if (res.success) {
-        setSuccessMessage(`Administrator account @${username} provisioned successfully.`);
-        setModalOpen(false);
-        setNewUsername("");
-        setNewDisplayName("");
-        setNewPassword("");
-        setNewConfirmPassword("");
-        await fetchAdmins();
-      } else {
-        setModalError(res.error.message || "Failed to create administrator account.");
-      }
-    } catch {
-      setModalError("Network error while creating administrator.");
-    } finally {
-      setSubmitting(false);
-    }
+  const handleCopyLink = () => {
+    const url = `${window.location.origin}/admin/register`;
+    navigator.clipboard.writeText(url);
+    setCopiedLink(true);
+    setTimeout(() => setCopiedLink(false), 3000);
   };
 
   const filteredAdmins = admins.filter((admin) => {
@@ -124,40 +71,42 @@ export default function AdminTeamPage() {
               Administrator Team
             </h1>
             <span className="rounded-full border border-metallicGold/30 bg-metallicGold/10 px-2.5 py-0.5 text-[11px] font-semibold text-metallicGold">
-              Multi-Admin
+              Platform Admin
             </span>
           </div>
           <p className="mt-1 text-xs text-slate-light">
-            Manage administrator accounts. Every provisioned administrator tracks the active admin who created it.
+            Directory of registered platform administrators. New administrators register independently via the public portal.
           </p>
         </div>
 
-        <button
-          onClick={() => {
-            setModalError(null);
-            setModalOpen(true);
-          }}
-          className="inline-flex items-center gap-2 rounded-xl bg-royalViolet px-4 py-2.5 text-xs font-semibold text-white shadow-royal transition hover:bg-royalViolet-hover"
-        >
-          <UserPlus className="h-4 w-4" />
-          <span>Provision Administrator</span>
-        </button>
-      </div>
-
-      {successMessage && (
-        <div className="flex items-center justify-between rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3.5 text-xs text-emerald-200">
-          <div className="flex items-center gap-2.5">
-            <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
-            <span>{successMessage}</span>
-          </div>
+        <div className="flex items-center gap-2.5">
           <button
-            onClick={() => setSuccessMessage(null)}
-            className="text-emerald-400 hover:text-emerald-300"
+            onClick={handleCopyLink}
+            className="inline-flex items-center gap-2 rounded-xl border border-obsidian-border bg-obsidian-surface px-3.5 py-2.5 text-xs font-semibold text-warmIvory hover:border-royalViolet hover:bg-obsidian-elevated transition"
           >
-            <X className="h-4 w-4" />
+            {copiedLink ? (
+              <>
+                <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                <span className="text-emerald-400">Link Copied!</span>
+              </>
+            ) : (
+              <>
+                <Copy className="h-4 w-4 text-slate" />
+                <span>Copy Registration Link</span>
+              </>
+            )}
           </button>
+
+          <Link
+            href="/admin/register"
+            target="_blank"
+            className="inline-flex items-center gap-2 rounded-xl bg-royalViolet px-4 py-2.5 text-xs font-semibold text-white shadow-royal transition hover:bg-royalViolet-hover"
+          >
+            <ExternalLink className="h-4 w-4" />
+            <span>Public Signup Portal</span>
+          </Link>
         </div>
-      )}
+      </div>
 
       {error && (
         <div className="flex items-start gap-3 rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-xs text-red-200">
@@ -293,124 +242,6 @@ export default function AdminTeamPage() {
                 })}
               </tbody>
             </table>
-          </div>
-        </div>
-      )}
-
-      {/* Provision Administrator Modal */}
-      {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-2xl border border-obsidian-border bg-obsidian-surface p-6 shadow-royal animate-in fade-in zoom-in-95 duration-150">
-            <div className="mb-5 flex items-center justify-between border-b border-obsidian-border pb-4">
-              <div className="flex items-center gap-2">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-royalViolet/20 text-royalViolet-hover">
-                  <UserPlus className="h-4 w-4" />
-                </div>
-                <h3 className="text-base font-bold text-warmIvory">
-                  Provision Administrator
-                </h3>
-              </div>
-              <button
-                onClick={() => setModalOpen(false)}
-                className="rounded-lg p-1 text-slate hover:bg-obsidian-elevated hover:text-warmIvory"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-
-            {modalError && (
-              <div className="mb-4 flex items-start gap-2.5 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-200">
-                <AlertCircle className="h-4 w-4 shrink-0 text-red-400" />
-                <span>{modalError}</span>
-              </div>
-            )}
-
-            <form onSubmit={handleCreateAdmin} className="space-y-4">
-              <div>
-                <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-light">
-                  Username <span className="text-red-400">*</span>
-                </label>
-                <div className="relative">
-                  <User className="absolute left-3 top-3 h-4 w-4 text-slate" />
-                  <input
-                    type="text"
-                    required
-                    value={newUsername}
-                    onChange={(e) => setNewUsername(e.target.value)}
-                    placeholder="e.g. priya"
-                    className="w-full rounded-xl border border-obsidian-border bg-obsidian-elevated py-2.5 pl-9 pr-3 text-xs text-warmIvory placeholder-slate focus:border-royalViolet focus:outline-none"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-light">
-                  Display Name <span className="text-slate font-normal">(optional)</span>
-                </label>
-                <input
-                  type="text"
-                  value={newDisplayName}
-                  onChange={(e) => setNewDisplayName(e.target.value)}
-                  placeholder="e.g. Priya Sharma"
-                  className="w-full rounded-xl border border-obsidian-border bg-obsidian-elevated px-3 py-2.5 text-xs text-warmIvory placeholder-slate focus:border-royalViolet focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-light">
-                  Password <span className="text-red-400">*</span>
-                </label>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-3 h-4 w-4 text-slate" />
-                  <input
-                    type="password"
-                    required
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    placeholder="Min 8 chars (1 uppercase, 1 number)"
-                    className="w-full rounded-xl border border-obsidian-border bg-obsidian-elevated py-2.5 pl-9 pr-3 text-xs text-warmIvory placeholder-slate focus:border-royalViolet focus:outline-none"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-light">
-                  Confirm Password <span className="text-red-400">*</span>
-                </label>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-3 h-4 w-4 text-slate" />
-                  <input
-                    type="password"
-                    required
-                    value={newConfirmPassword}
-                    onChange={(e) => setNewConfirmPassword(e.target.value)}
-                    placeholder="Re-enter password"
-                    className="w-full rounded-xl border border-obsidian-border bg-obsidian-elevated py-2.5 pl-9 pr-3 text-xs text-warmIvory placeholder-slate focus:border-royalViolet focus:outline-none"
-                  />
-                </div>
-              </div>
-
-              <div className="mt-6 flex items-center justify-end gap-2.5 border-t border-obsidian-border pt-4">
-                <button
-                  type="button"
-                  onClick={() => setModalOpen(false)}
-                  className="rounded-xl border border-obsidian-border px-4 py-2 text-xs font-semibold text-slate-light hover:bg-obsidian-elevated hover:text-warmIvory"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="inline-flex items-center gap-1.5 rounded-xl bg-royalViolet px-4 py-2 text-xs font-semibold text-white shadow-royal hover:bg-royalViolet-hover disabled:opacity-50"
-                >
-                  {submitting ? (
-                    <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                  ) : (
-                    <span>Create Administrator</span>
-                  )}
-                </button>
-              </div>
-            </form>
           </div>
         </div>
       )}
