@@ -3,6 +3,7 @@ import {
   PublicCodeVerificationResponse,
   SubmissionSuccessResponse,
   ContactSubmissionInput,
+  RegisterInput,
   AdminLoginInput,
   BootstrapSetupInput,
   BootstrapStatusDTO,
@@ -193,6 +194,14 @@ export class ConnectMeApiClient {
 
   async setupBootstrap(input: BootstrapSetupInput): Promise<ApiResponse<{ user: AdminUserDTO; token?: string; refreshToken?: string }>> {
     return this.request("/auth/bootstrap/setup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    });
+  }
+
+  async register(input: RegisterInput): Promise<ApiResponse<{ user: AdminUserDTO; token?: string; refreshToken?: string }>> {
+    return this.request("/auth/register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(input),

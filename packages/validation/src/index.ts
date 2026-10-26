@@ -19,9 +19,52 @@ export const ContactSubmissionSchema = z.object({
   discussionNotes: z.string().trim().max(1000).optional().or(z.literal("")),
 });
 
+export const RegisterSchema = z
+  .object({
+    name: z
+      .string()
+      .trim()
+      .min(1, "Name is required")
+      .max(100, "Name must be under 100 characters"),
+    email: z
+      .string()
+      .trim()
+      .email("Invalid email address")
+      .max(150, "Email must be under 150 characters"),
+    number: z
+      .string()
+      .trim()
+      .min(5, "Phone number is required")
+      .max(30, "Phone number must be under 30 characters")
+      .optional(),
+    phoneNumber: z
+      .string()
+      .trim()
+      .min(5, "Phone number is required")
+      .max(30, "Phone number must be under 30 characters")
+      .optional(),
+    username: z
+      .string()
+      .trim()
+      .min(3)
+      .max(32)
+      .regex(/^[a-z0-9][a-z0-9._-]*$/i, "Username must contain only letters, numbers, dots, hyphens, or underscores")
+      .optional(),
+    password: z
+      .string()
+      .min(8, "Password must be at least 8 characters")
+      .max(128)
+      .regex(/[A-Z]/, "Password must contain at least one uppercase letter")
+      .regex(/[0-9]/, "Password must contain at least one number"),
+  })
+  .refine((data) => Boolean((data.number && data.number.length >= 5) || (data.phoneNumber && data.phoneNumber.length >= 5)), {
+    message: "Phone number is required",
+    path: ["number"],
+  });
+
 export const AdminLoginSchema = z.object({
-  username: z.string().trim().min(3, "Username must be at least 3 characters"),
-  password: z.string().min(8, "Password must be at least 8 characters"),
+  username: z.string().trim().min(1, "Username or email is required"),
+  password: z.string().min(1, "Password is required"),
 });
 
 export const CreateAdminSchema = z.object({
@@ -96,6 +139,7 @@ export const UpdateAdminSmsSettingsSchema = z.object({
 );
 
 export type ContactSubmissionInput = z.infer<typeof ContactSubmissionSchema>;
+export type RegisterInput = z.infer<typeof RegisterSchema>;
 export type AdminLoginInput = z.infer<typeof AdminLoginSchema>;
 export type CheckUsernameInput = z.infer<typeof CheckUsernameSchema>;
 export type CreateAdminInput = z.infer<typeof CreateAdminSchema>;

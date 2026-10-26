@@ -8,6 +8,52 @@ export class UserRepository {
     });
   }
 
+  async findByUsernameOrEmail(identifier: string): Promise<(AdminUser & { createdBy?: AdminUser | null }) | null> {
+    const clean = identifier.toLowerCase().trim();
+    return prisma.adminUser.findFirst({
+      where: {
+        OR: [
+          { username: clean },
+          { email: clean },
+          { phoneNumber: clean },
+        ],
+      },
+      include: { createdBy: true },
+    });
+  }
+
+  async findByEmail(email: string): Promise<AdminUser | null> {
+    return prisma.adminUser.findFirst({
+      where: { email: email.toLowerCase().trim() },
+    });
+  }
+
+  async registerUser(data: {
+    username: string;
+    displayName: string;
+    email: string;
+    phoneNumber?: string;
+    passwordHash: string;
+  }): Promise<AdminUser & { createdBy?: AdminUser | null }> {
+    return prisma.adminUser.create({
+      data: {
+        username: data.username.toLowerCase().trim(),
+        displayName: data.displayName.trim(),
+        email: data.email.toLowerCase().trim(),
+        phoneNumber: data.phoneNumber?.trim() || null,
+        smsSenderPhone: data.phoneNumber?.trim() || null,
+        smsSenderEmail: data.email.toLowerCase().trim(),
+        passwordHash: data.passwordHash,
+        isActive: true,
+        isBootstrapPending: false,
+        isInitialAdmin: null,
+      },
+      include: {
+        createdBy: true,
+      },
+    });
+  }
+
   async findById(id: string): Promise<(AdminUser & { createdBy?: AdminUser | null }) | null> {
     return prisma.adminUser.findUnique({
       where: { id },

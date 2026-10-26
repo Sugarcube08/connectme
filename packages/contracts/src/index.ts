@@ -10,6 +10,8 @@ export interface AdminUserDTO {
   id: string;
   username: string;
   displayName: string | null;
+  email?: string | null;
+  phoneNumber?: string | null;
   isActive: boolean;
   isInitialAdmin?: boolean | null;
   isBootstrapPending: boolean;

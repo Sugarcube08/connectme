@@ -10,6 +10,8 @@ export function serializeAdminUser(user: {
   id: string;
   username: string;
   displayName: string | null;
+  email?: string | null;
+  phoneNumber?: string | null;
   isActive: boolean;
   isInitialAdmin?: boolean | null;
   isBootstrapPending: boolean;
@@ -21,6 +23,8 @@ export function serializeAdminUser(user: {
     id: user.id,
     username: user.username,
     displayName: user.displayName,
+    email: user.email ?? null,
+    phoneNumber: user.phoneNumber ?? null,
     isActive: user.isActive,
     isInitialAdmin: user.isInitialAdmin ?? null,
     isBootstrapPending: user.isBootstrapPending,

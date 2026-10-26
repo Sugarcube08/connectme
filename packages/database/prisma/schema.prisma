@@ -25,6 +25,8 @@ model AdminUser {
   id                 String             @id @default(uuid())
   username           String             @unique
   displayName        String?            @map("display_name")
+  email              String?            @unique @map("email") @db.VarChar(191)
+  phoneNumber        String?            @map("phone_number") @db.VarChar(50)
   passwordHash       String?            @map("password_hash")
   isActive           Boolean            @default(false) @map("is_active")
   // Nullable+unique: only one row may ever be marked as the initial administrator.

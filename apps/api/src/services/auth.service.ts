@@ -7,6 +7,7 @@ import { config } from "../config/env";
 import { serializeAdminUser } from "../serializers";
 import {
   AdminLoginInput,
+  RegisterInput,
   BootstrapSetupInput,
   BootstrapStatusDTO,
   AdminUserDTO,
@@ -17,6 +18,7 @@ import {
   UnauthorizedError,
   ValidationError,
   ForbiddenError,
+  ConflictError,
   GoneError,
 } from "../errors/app-error";
 
@@ -147,8 +149,48 @@ export class AuthService {
     return this.createAuthSession(serializeAdminUser(activatedUser));
   }
 
+  async register(input: RegisterInput): Promise<AuthSessionResult> {
+    const email = input.email.trim().toLowerCase();
+    const existing = await this.userRepo.findByEmail(email);
+    if (existing) {
+      throw new ConflictError("An account with this email address already exists. Please sign in.", "EMAIL_ALREADY_EXISTS");
+    }
+
+    // Determine or generate unique username
+    let username = input.username?.trim().toLowerCase();
+    if (!username) {
+      const emailPrefix = email.split("@")[0].replace(/[^a-z0-9]/g, "").slice(0, 20);
+      username = emailPrefix.length >= 3 ? emailPrefix : `user${Math.floor(1000 + Math.random() * 9000)}`;
+    }
+
+    // Ensure username uniqueness
+    let attempt = 0;
+    let finalUsername = username;
+    while (await this.userRepo.findByUsername(finalUsername)) {
+      attempt++;
+      finalUsername = `${username}${Math.floor(100 + Math.random() * 900)}`;
+      if (attempt > 10) {
+        finalUsername = `${username}${Date.now().toString().slice(-4)}`;
+        break;
+      }
+    }
+
+    const phoneNumber = (input.number || input.phoneNumber)?.trim();
+    const passwordHash = await bcrypt.hash(input.password, 12);
+
+    const user = await this.userRepo.registerUser({
+      username: finalUsername,
+      displayName: input.name.trim(),
+      email,
+      phoneNumber,
+      passwordHash,
+    });
+
+    return this.createAuthSession(serializeAdminUser(user));
+  }
+
   async login(input: AdminLoginInput): Promise<AuthSessionResult> {
-    const user = await this.userRepo.findByUsername(input.username);
+    const user = await this.userRepo.findByUsernameOrEmail(input.username);
     if (!user || !user.isActive || !user.passwordHash || user.isBootstrapPending) {
       throw new UnauthorizedError("Invalid username or password.", "INVALID_CREDENTIALS");
     }

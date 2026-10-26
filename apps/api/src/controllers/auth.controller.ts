@@ -29,9 +29,9 @@ export class AuthController {
 
   private authResponse(req: Request, res: Response, result: {
     user: unknown; token: string; webSession: string; refreshToken: string;
-  }) {
+  }, statusCode = 200) {
     this.setCookies(res, result);
-    return res.status(200).json({
+    return res.status(statusCode).json({
       success: true,
       data: {
         user: result.user,
@@ -40,6 +40,13 @@ export class AuthController {
       },
     });
   }
+
+  register = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const result = await this.authService.register(req.body);
+      return this.authResponse(req, res, result, 201);
+    } catch (err) { next(err); }
+  };
 
   getBootstrapStatus = async (_req: Request, res: Response, next: NextFunction) => {
     try {

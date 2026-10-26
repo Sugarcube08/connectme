@@ -72,6 +72,19 @@ export default function LoginScreen() {
             Privacy-First Smart Connection & Lead Intelligence
           </Text>
 
+          {/* Tab Switcher: Sign In | Register */}
+          <View style={styles.tabSwitcher}>
+            <TouchableOpacity style={[styles.tabButton, styles.tabButtonActive]}>
+              <Text style={[styles.tabButtonText, styles.tabButtonTextActive]}>Sign In</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.tabButton}
+              onPress={() => router.push("/register")}
+            >
+              <Text style={styles.tabButtonText}>Create Account</Text>
+            </TouchableOpacity>
+          </View>
+
           {/* Error Message */}
           {error && (
             <View style={styles.errorBox}>
@@ -81,10 +94,10 @@ export default function LoginScreen() {
 
           {/* Form Fields */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>ADMIN USERNAME</Text>
+            <Text style={styles.label}>ADMIN USERNAME OR EMAIL</Text>
             <TextInput
               style={styles.input}
-              placeholder="e.g. admin or harsh"
+              placeholder="e.g. admin or harsh@example.com"
               placeholderTextColor={Theme.colors.textMuted}
               value={email}
               onChangeText={setEmail}
@@ -119,6 +132,16 @@ export default function LoginScreen() {
                 <Text style={styles.buttonText}>Authenticate Session</Text>
               </View>
             )}
+          </TouchableOpacity>
+
+          {/* Bottom Switch Link */}
+          <TouchableOpacity
+            style={styles.switchLink}
+            onPress={() => router.push("/register")}
+          >
+            <Text style={styles.switchLinkText}>
+              New to Connect Me? <Text style={styles.goldLink}>Create an account →</Text>
+            </Text>
           </TouchableOpacity>
 
           {/* Footer Security Note */}
@@ -193,8 +216,46 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: Theme.colors.textSecondary,
     marginTop: 6,
-    marginBottom: 20,
+    marginBottom: 16,
     lineHeight: 18,
+  },
+  tabSwitcher: {
+    flexDirection: "row",
+    backgroundColor: Theme.colors.surfaceElevated,
+    borderRadius: Theme.radius.md,
+    padding: 3,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+  },
+  tabButton: {
+    flex: 1,
+    paddingVertical: 9,
+    alignItems: "center",
+    borderRadius: Theme.radius.sm,
+  },
+  tabButtonActive: {
+    backgroundColor: Theme.colors.primary,
+  },
+  tabButtonText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: Theme.colors.textMuted,
+  },
+  tabButtonTextActive: {
+    color: "#FFFFFF",
+  },
+  switchLink: {
+    marginTop: 16,
+    alignItems: "center",
+  },
+  switchLinkText: {
+    fontSize: 12,
+    color: Theme.colors.textSecondary,
+  },
+  goldLink: {
+    color: Theme.colors.gold,
+    fontWeight: "700",
   },
   errorBox: {
     backgroundColor: Theme.colors.errorBg,

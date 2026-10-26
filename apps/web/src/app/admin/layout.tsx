@@ -22,8 +22,8 @@ export default function AdminLayout({
   const pathname = usePathname();
   const router = useRouter();
 
-  // If on login page, render without admin navigation frame
-  if (pathname === "/admin/login") {
+  // If on login or register page, render without admin navigation frame
+  if (pathname === "/admin/login" || pathname === "/admin/register") {
     return <>{children}</>;
   }
 
