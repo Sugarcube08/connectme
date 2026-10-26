@@ -210,28 +210,6 @@ export function PhoneInput({
         </div>
       </div>
 
-      {/* Live Normalization Status Banner */}
-      {localNumber.trim().length > 0 && (
-        <div className="mt-2 flex items-center justify-between rounded-lg border border-obsidian-border/50 bg-obsidian-elevated/40 px-3 py-1.5 text-xs">
-          <div className="flex items-center gap-1.5">
-            <Phone className="h-3 w-3 text-royalViolet" />
-            <span className="text-slate-light">Normalized for SMS:</span>
-            <span className="font-mono font-medium text-warmIvory">
-              {formattedDisplay || normalized}
-            </span>
-          </div>
-          {isValid ? (
-            <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-400">
-              <Check className="h-3 w-3" /> Valid
-            </span>
-          ) : (
-            <span className="text-[11px] text-amber-400/90">
-              Enter complete number
-            </span>
-          )}
-        </div>
-      )}
-
       {error && <p className="mt-1.5 text-xs text-rose-400">{error}</p>}
     </div>
   );

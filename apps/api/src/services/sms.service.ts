@@ -32,14 +32,14 @@ export class SmsService {
   private normalizeGatewayUrl(rawUrl: string): string {
     let url = rawUrl.trim().replace(/\/+$/, "");
     if (!url.endsWith("/messages") && !url.endsWith("/message")) {
-      if (url.endsWith("/3rdparty/v1")) {
+      if (url.endsWith("/api/3rdparty/v1")) {
         url = `${url}/messages`;
-      } else if (url.endsWith("/api/3rdparty/v1")) {
+      } else if (url.endsWith("/3rdparty/v1")) {
         url = `${url}/messages`;
       } else if (url.endsWith("/api")) {
         url = `${url}/3rdparty/v1/messages`;
       } else {
-        url = `${url}/3rdparty/v1/messages`;
+        url = `${url}/api/3rdparty/v1/messages`;
       }
     }
     return url;
@@ -84,7 +84,7 @@ export class SmsService {
         }>;
       }).fetch;
 
-      const res = await fetchFn(endpoint, {
+      let res = await fetchFn(endpoint, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -92,6 +92,28 @@ export class SmsService {
         },
         body: JSON.stringify(payload),
       });
+
+      // If 404, try alternative path (e.g. /3rdparty/v1/messages vs /api/3rdparty/v1/messages)
+      if (res.status === 404) {
+        let altEndpoint: string | null = null;
+        if (endpoint.includes("/api/3rdparty/v1/messages")) {
+          altEndpoint = endpoint.replace("/api/3rdparty/v1/messages", "/3rdparty/v1/messages");
+        } else if (endpoint.includes("/3rdparty/v1/messages")) {
+          altEndpoint = endpoint.replace("/3rdparty/v1/messages", "/api/3rdparty/v1/messages");
+        }
+
+        if (altEndpoint) {
+          console.log(`[SmsService] Endpoint 404 on ${endpoint}, trying alternate ${altEndpoint}...`);
+          res = await fetchFn(altEndpoint, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Basic ${auth}`,
+            },
+            body: JSON.stringify(payload),
+          });
+        }
+      }
 
       if (!res.ok) {
         const errText = await res.text();
