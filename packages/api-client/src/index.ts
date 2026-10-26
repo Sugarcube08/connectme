@@ -18,6 +18,7 @@ import {
   UpdateContactInput,
   UpdateSettingsInput,
   UpdateAdminSmsSettingsInput,
+  StartupHeartbeatResponse,
 } from "@connectme/contracts";
 
 export interface ApiClientConfig {
@@ -151,6 +152,12 @@ export class ConnectMeApiClient {
 
   async verifyCode(token: string): Promise<ApiResponse<PublicCodeVerificationResponse>> {
     return this.request<PublicCodeVerificationResponse>(`/public/codes/${encodeURIComponent(token)}`);
+  }
+
+  async sendStartupHeartbeat(token: string): Promise<ApiResponse<StartupHeartbeatResponse>> {
+    return this.request<StartupHeartbeatResponse>(`/public/codes/${encodeURIComponent(token)}/heartbeat`, {
+      method: "POST",
+    });
   }
 
   async redeemCode(token: string, data: ContactSubmissionInput, image?: any): Promise<ApiResponse<SubmissionSuccessResponse>> {

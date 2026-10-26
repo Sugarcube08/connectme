@@ -77,3 +77,4 @@ temp/
 # Local deployment state
 .vercel/
 .netlify/
+*.txt

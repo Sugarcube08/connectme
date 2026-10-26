@@ -174,7 +174,7 @@ describe("SMS Gateway Security & Integration", () => {
       expect(decryptPassword(dbUser?.smsGatewayPassword)).toBe("gateway-secret-password-xyz");
     });
 
-    it("returns requiresSmsNotice and smsNotice when verifying code created by SMS-enabled admin", async () => {
+    it("returns requiresSmsNotice, smsNotice, smsConfigured and smsStartupHeartbeatUrl when verifying code created by SMS-enabled admin", async () => {
       // Create code created by this SMS-enabled admin
       const token = `test-sms-token-${randomBytes(6).toString("hex")}`;
       const tokenHash = (await import("node:crypto")).createHash("sha256").update(token).digest("hex");
@@ -192,9 +192,57 @@ describe("SMS Gateway Security & Integration", () => {
       expect(verifyRes.status).toBe(200);
       expect(verifyRes.body.data.eligible).toBe(true);
       expect(verifyRes.body.data.requiresSmsNotice).toBe(true);
+      expect(verifyRes.body.data.smsConfigured).toBe(true);
+      expect(verifyRes.body.data.smsStartupHeartbeatUrl).toBe("https://androgateserver.onrender.com/health/startup");
       expect(verifyRes.body.data.smsNotice).toBe(
         "be sure to enter correct number, because it's not editable and you'll receive my contact on the given number via sms only"
       );
+
+      // Verify heartbeat endpoint returns valid response
+      const heartbeatRes = await request(app).post(`/api/v1/public/codes/${token}/heartbeat`);
+      expect(heartbeatRes.status).toBe(200);
+      expect(heartbeatRes.body.success).toBe(true);
+      expect(typeof heartbeatRes.body.data.ready).toBe("boolean");
+    });
+
+    it("does not fallback anywhere when no SMS gateway URL is configured", async () => {
+      // Create admin without SMS gateway configured
+      const noSmsUsername = `no-sms-admin-${randomBytes(4).toString("hex")}`;
+      const noSmsAdmin = await prisma.adminUser.create({
+        data: {
+          username: noSmsUsername,
+          displayName: "No SMS Admin",
+          isActive: true,
+          isBootstrapPending: false,
+          smsEnabled: false,
+          smsGatewayUrl: null,
+        },
+      });
+
+      const token = `test-no-sms-${randomBytes(6).toString("hex")}`;
+      const tokenHash = (await import("node:crypto")).createHash("sha256").update(token).digest("hex");
+
+      await prisma.accessCode.create({
+        data: {
+          token,
+          tokenHash,
+          createdByAdminId: noSmsAdmin.id,
+          status: "ACTIVE",
+        },
+      });
+
+      const verifyRes = await request(app).get(`/api/v1/public/codes/${token}`);
+      expect(verifyRes.status).toBe(200);
+      expect(verifyRes.body.data.eligible).toBe(true);
+      expect(verifyRes.body.data.smsConfigured).toBeFalsy();
+      expect(verifyRes.body.data.smsGatewayUrl).toBeUndefined();
+      expect(verifyRes.body.data.smsStartupHeartbeatUrl).toBeUndefined();
+      expect(verifyRes.body.data.requiresSmsNotice).toBeFalsy();
+
+      const heartbeatRes = await request(app).post(`/api/v1/public/codes/${token}/heartbeat`);
+      expect(heartbeatRes.status).toBe(200);
+      expect(heartbeatRes.body.data.ready).toBe(false);
+      expect(heartbeatRes.body.data.message).toBe("SMS gateway is not configured for this code.");
     });
   });
 });

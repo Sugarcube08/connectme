@@ -27,6 +27,7 @@ for (const candidate of [
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  outputFileTracingRoot: path.resolve(process.cwd(), "../../"),
   transpilePackages: ["@connectme/api-client", "@connectme/contracts", "@connectme/design-tokens", "@connectme/validation"],
   experimental: {
     serverActions: {

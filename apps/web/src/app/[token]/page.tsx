@@ -63,6 +63,39 @@ export default function PublicContactPage({ params }: PublicPageProps) {
   const [submitted, setSubmitted] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
+  // SMS Gateway Heartbeat States
+  const [smsConfigured, setSmsConfigured] = useState(false);
+  const [smsStartupHeartbeatUrl, setSmsStartupHeartbeatUrl] = useState<string | null>(null);
+  const [smsServiceReady, setSmsServiceReady] = useState<boolean | null>(null);
+  const firstHeartbeatSentRef = useRef(false);
+  const secondHeartbeatSentRef = useRef(false);
+
+  const sendHeartbeat = async (url: string, isConfirmation = false) => {
+    try {
+      // 1. Direct browser fetch to wake up Render (mode: "no-cors" handles missing CORS headers safely)
+      fetch(url, { method: "GET", mode: "no-cors" }).catch(() => {});
+
+      // 2. Server-verified heartbeat to inspect real readiness status
+      const res = await apiClient.sendStartupHeartbeat(token);
+      if (res.success && res.data) {
+        if (res.data.ready) {
+          setSmsServiceReady(true);
+          return true;
+        } else if (isConfirmation) {
+          setSmsServiceReady(false);
+          return false;
+        }
+      } else if (isConfirmation) {
+        setSmsServiceReady(false);
+      }
+    } catch {
+      if (isConfirmation) {
+        setSmsServiceReady(false);
+      }
+    }
+    return false;
+  };
+
   useEffect(() => {
     async function checkToken() {
       try {
@@ -76,6 +109,17 @@ export default function PublicContactPage({ params }: PublicPageProps) {
             requiresSmsNotice: res.data.requiresSmsNotice,
             smsNotice: res.data.smsNotice,
           });
+
+          if (res.data.smsConfigured && res.data.smsStartupHeartbeatUrl) {
+            setSmsConfigured(true);
+            setSmsStartupHeartbeatUrl(res.data.smsStartupHeartbeatUrl);
+
+            // Heartbeat 1: Instantly send heartbeat as soon as redeem code form opens
+            if (!firstHeartbeatSentRef.current) {
+              firstHeartbeatSentRef.current = true;
+              sendHeartbeat(res.data.smsStartupHeartbeatUrl, false);
+            }
+          }
         } else {
           setEligibility({
             eligible: false,
@@ -94,6 +138,27 @@ export default function PublicContactPage({ params }: PublicPageProps) {
 
     checkToken();
   }, [token]);
+
+  // Heartbeat 2: Triggered as user completes mandatory fields
+  const mandatoryFieldsFilled = Boolean(fullName.trim().length >= 1 && phoneNumber.trim().length >= 5);
+
+  useEffect(() => {
+    if (mandatoryFieldsFilled && smsConfigured && smsStartupHeartbeatUrl) {
+      if (!secondHeartbeatSentRef.current) {
+        secondHeartbeatSentRef.current = true;
+        sendHeartbeat(smsStartupHeartbeatUrl, true);
+      }
+    }
+  }, [mandatoryFieldsFilled, smsConfigured, smsStartupHeartbeatUrl]);
+
+  const handleMandatoryFieldBlur = () => {
+    if (fullName.trim().length >= 1 && phoneNumber.trim().length >= 5) {
+      if (smsConfigured && smsStartupHeartbeatUrl && !secondHeartbeatSentRef.current) {
+        secondHeartbeatSentRef.current = true;
+        sendHeartbeat(smsStartupHeartbeatUrl, true);
+      }
+    }
+  };
 
   const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
 
@@ -276,7 +341,7 @@ export default function PublicContactPage({ params }: PublicPageProps) {
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        await videoRef.current.play().catch(() => {});
+        await videoRef.current.play().catch(() => { });
       }
     } catch (err: any) {
       console.error("Camera access error:", err);
@@ -388,6 +453,12 @@ export default function PublicContactPage({ params }: PublicPageProps) {
     if (!phoneNumber.trim()) {
       setFormError("Please enter your phone number.");
       return;
+    }
+
+    // If SMS configured, ensure second confirmation heartbeat was dispatched
+    if (smsConfigured && smsStartupHeartbeatUrl && !secondHeartbeatSentRef.current) {
+      secondHeartbeatSentRef.current = true;
+      sendHeartbeat(smsStartupHeartbeatUrl, true).catch(() => {});
     }
 
     try {
@@ -502,7 +573,7 @@ export default function PublicContactPage({ params }: PublicPageProps) {
         <div className="mb-8 text-center">
           <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-royalViolet/40 bg-royalViolet/10 px-3.5 py-1 text-xs font-semibold text-warmIvory backdrop-blur-md">
             <Sparkles className="h-3 w-3 text-metallicGold" />
-            <span>DEVCON PROFESSIONAL CONNECTION</span>
+            <span>PERSONALLY PROFESSIONAL CONNECTION</span>
           </div>
           <h1 className="text-2xl font-black tracking-tight text-warmIvory sm:text-3xl">
             CONNECT <span className="text-royalViolet">ME</span>
@@ -531,6 +602,7 @@ export default function PublicContactPage({ params }: PublicPageProps) {
                 required
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
+                onBlur={handleMandatoryFieldBlur}
                 placeholder="e.g. Satoshi Nakamoto"
                 className="w-full rounded-xl border border-obsidian-border bg-obsidian-elevated px-4 py-3 text-sm text-warmIvory placeholder-slate transition focus:border-royalViolet focus:outline-none focus:ring-1 focus:ring-royalViolet"
               />
@@ -545,16 +617,36 @@ export default function PublicContactPage({ params }: PublicPageProps) {
                 required
                 value={phoneNumber}
                 onChange={(e) => setPhoneNumber(e.target.value)}
-                placeholder="e.g. +1 555-0199 or Telegram/Signal"
+                onBlur={handleMandatoryFieldBlur}
+                placeholder="e.g. +1 555-0199"
                 className="w-full rounded-xl border border-obsidian-border bg-obsidian-elevated px-4 py-3 text-sm text-warmIvory placeholder-slate transition focus:border-royalViolet focus:outline-none focus:ring-1 focus:ring-royalViolet"
               />
               {eligibility?.requiresSmsNotice && (
-                <div className="mt-2.5 flex items-start gap-2.5 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs leading-relaxed text-amber-200">
-                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
-                  <span>
-                    {eligibility.smsNotice ||
-                      "be sure to enter correct number, because it's not editable and you'll receive my contact on the given number via sms only"}
-                  </span>
+                <div className="mt-2.5 space-y-2">
+                  <div className="flex items-start gap-2.5 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs leading-relaxed text-amber-200">
+                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
+                    <span>
+                      {eligibility.smsNotice ||
+                        "be sure to enter correct number, because it's not editable and you'll receive my contact on the given number via sms only"}
+                    </span>
+                  </div>
+
+                  {smsServiceReady === true && (
+                    <div className="flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-[11px] font-medium text-emerald-300">
+                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                      <span>SMS Service confirmed ready • Automatic dispatch active</span>
+                    </div>
+                  )}
+
+                  {smsServiceReady === false && (
+                    <div className="flex items-center gap-2 rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-[11px] text-amber-200/90">
+                      <span className="relative flex h-2 w-2 shrink-0">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                      </span>
+                      <span>Service warmup in progress • Details captured securely</span>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

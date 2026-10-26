@@ -12,6 +12,8 @@ const router = Router();
 const controller = new PublicController();
 
 router.get("/codes/:token", controller.verifyCode);
+router.get("/codes/:token/heartbeat", controller.sendStartupHeartbeat);
+router.post("/codes/:token/heartbeat", controller.sendStartupHeartbeat);
 router.post("/codes/:token/redeem", upload.single("profileImage"), controller.redeemCode);
 
 export const publicRoutes = router;

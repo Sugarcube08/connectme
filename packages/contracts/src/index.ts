@@ -108,6 +108,15 @@ export interface PublicCodeVerificationResponse {
   message?: string;
   requiresSmsNotice?: boolean;
   smsNotice?: string;
+  smsConfigured?: boolean;
+  smsGatewayUrl?: string | null;
+  smsStartupHeartbeatUrl?: string | null;
+}
+
+export interface StartupHeartbeatResponse {
+  ready: boolean;
+  status?: number;
+  message?: string;
 }
 
 export interface SubmissionSuccessResponse {

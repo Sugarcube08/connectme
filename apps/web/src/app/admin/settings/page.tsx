@@ -195,11 +195,10 @@ export default function AdminSettingsPage() {
 
         {appMessage && (
           <div
-            className={`flex items-start gap-3 rounded-xl border p-4 text-xs font-medium ${
-              appMessage.type === "success"
+            className={`flex items-start gap-3 rounded-xl border p-4 text-xs font-medium ${appMessage.type === "success"
                 ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-200"
                 : "border-red-500/30 bg-red-500/10 text-red-200"
-            }`}
+              }`}
           >
             {appMessage.type === "success" ? (
               <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
@@ -290,11 +289,10 @@ export default function AdminSettingsPage() {
 
         {smsMessage && (
           <div
-            className={`flex items-start gap-3 rounded-xl border p-4 text-xs font-medium ${
-              smsMessage.type === "success"
+            className={`flex items-start gap-3 rounded-xl border p-4 text-xs font-medium ${smsMessage.type === "success"
                 ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-200"
                 : "border-red-500/30 bg-red-500/10 text-red-200"
-            }`}
+              }`}
           >
             {smsMessage.type === "success" ? (
               <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
@@ -352,13 +350,12 @@ export default function AdminSettingsPage() {
                   <Server className="h-3.5 w-3.5 text-royalViolet" />
                   SMS Gateway API URL
                 </span>
-                <span className="text-[10px] lowercase text-slate">(no default url)</span>
               </label>
               <input
                 type="url"
                 value={smsGatewayUrl}
                 onChange={(e) => setSmsGatewayUrl(e.target.value)}
-                placeholder="https://androgateserver.onrender.com"
+                placeholder="https://your-sever-domain.com"
                 className="w-full rounded-xl border border-obsidian-border bg-obsidian-elevated px-4 py-2.5 text-xs text-warmIvory focus:border-royalViolet focus:outline-none"
               />
               <span className="mt-1 block text-[11px] text-slate">

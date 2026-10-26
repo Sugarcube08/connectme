@@ -16,9 +16,9 @@ import { apiClient } from "@/lib/api";
 
 export default function AdminLayout({
   children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+}: {
+  children: any;
+}) {
   const pathname = usePathname();
   const router = useRouter();
 

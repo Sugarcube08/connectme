@@ -7,6 +7,21 @@ import { AccessCodeItem, GeneratedCodeDetail, CodeStatus } from "@connectme/cont
 
 const TOKEN_ALPHABET = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
+export function resolveStartupHeartbeatUrl(rawUrl?: string | null): string | null {
+  if (!rawUrl || typeof rawUrl !== "string") return null;
+  const trimmed = rawUrl.trim();
+  if (!trimmed) return null;
+
+  try {
+    const parsed = new URL(trimmed.startsWith("http") ? trimmed : `https://${trimmed}`);
+    return `${parsed.origin}/health/startup`;
+  } catch {
+    const clean = trimmed.replace(/\/+$/, "");
+    if (clean.endsWith("/health/startup")) return clean;
+    return `${clean}/health/startup`;
+  }
+}
+
 export class TokenService {
   constructor(private codeRepo = new CodeRepository()) { }
 
@@ -130,6 +145,9 @@ export class TokenService {
     codeId?: string;
     requiresSmsNotice?: boolean;
     smsNotice?: string;
+    smsConfigured?: boolean;
+    smsGatewayUrl?: string;
+    smsStartupHeartbeatUrl?: string;
   }> {
     const code = await this.codeRepo.findByTokenOrHashes(token, this.tokenHashCandidates(token));
     if (!code) return { eligible: false, status: "REVOKED" };
@@ -140,12 +158,17 @@ export class TokenService {
     }
 
     const admin = code.createdByAdmin;
+    const hasConfiguredGatewayUrl = Boolean(admin?.smsGatewayUrl && admin.smsGatewayUrl.trim().length > 0);
     const isSmsConfigured = Boolean(
       admin?.smsEnabled &&
-      admin?.smsGatewayUrl &&
+      hasConfiguredGatewayUrl &&
       admin?.smsGatewayUsername &&
       admin?.smsGatewayPassword
     );
+
+    const smsStartupHeartbeatUrl = isSmsConfigured && admin?.smsGatewayUrl
+      ? resolveStartupHeartbeatUrl(admin.smsGatewayUrl) || undefined
+      : undefined;
 
     return {
       eligible: effectiveStatus === "ACTIVE",
@@ -153,8 +176,11 @@ export class TokenService {
       codeId: code.id,
       requiresSmsNotice: isSmsConfigured,
       smsNotice: isSmsConfigured
-        ? "Be sure to enter the correct number, because it's not editable and you'll receive my contact on the given number via SMS only."
+        ? "be sure to enter correct number, because it's not editable and you'll receive my contact on the given number via sms only"
         : undefined,
+      smsConfigured: isSmsConfigured,
+      smsGatewayUrl: isSmsConfigured ? (admin?.smsGatewayUrl || undefined) : undefined,
+      smsStartupHeartbeatUrl,
     };
   }
 
