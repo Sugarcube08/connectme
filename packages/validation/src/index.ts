@@ -82,12 +82,6 @@ export const AdminLoginSchema = z.object({
   password: z.string().min(1, "Password is required"),
 });
 
-export const CreateAdminSchema = z.object({
-  username: z.string().trim().min(3).max(32).regex(/^[a-z0-9][a-z0-9._-]*$/i),
-  displayName: z.string().trim().max(100).optional(),
-  password: z.string().min(8).max(128).regex(/[A-Z]/).regex(/[0-9]/),
-});
-
 export const CheckUsernameSchema = z.object({
   username: z.string().trim().min(1, "Username is required"),
 });
@@ -159,7 +153,6 @@ export type ResendOtpInput = z.infer<typeof ResendOtpSchema>;
 export type VerifyOtpInput = z.infer<typeof VerifyOtpSchema>;
 export type AdminLoginInput = z.infer<typeof AdminLoginSchema>;
 export type CheckUsernameInput = z.infer<typeof CheckUsernameSchema>;
-export type CreateAdminInput = z.infer<typeof CreateAdminSchema>;
 export type BootstrapSetupInput = z.infer<typeof BootstrapSetupSchema>;
 export type GenerateCodeInput = z.infer<typeof GenerateCodeSchema>;
 export type BatchGenerateCodeInput = z.infer<typeof BatchGenerateCodeSchema>;

@@ -11,7 +11,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   Switch,
-  Modal,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { mobileApiClient } from "../../lib/api";
@@ -25,8 +24,6 @@ import {
   EyeIcon,
   EyeOffIcon,
   LogOutIcon,
-  UsersIcon,
-  CloseIcon,
   RefreshIcon,
   MessageSquareIcon,
 } from "../../components/Icons";
@@ -59,15 +56,6 @@ export default function MobileSettingsScreen() {
   const [savingSms, setSavingSms] = useState(false);
   const [testingHeartbeat, setTestingHeartbeat] = useState(false);
   const [smsSuccess, setSmsSuccess] = useState<string | null>(null);
-
-  // Multi-Admin Team Modal
-  const [teamModalVisible, setTeamModalVisible] = useState(false);
-  const [adminsList, setAdminsList] = useState<AdminUserDTO[]>([]);
-  const [loadingAdmins, setLoadingAdmins] = useState(false);
-  const [newAdminUsername, setNewAdminUsername] = useState("");
-  const [newAdminDisplayName, setNewAdminDisplayName] = useState("");
-  const [newAdminPassword, setNewAdminPassword] = useState("");
-  const [creatingAdmin, setCreatingAdmin] = useState(false);
 
   const loadData = useCallback(async () => {
     try {
@@ -222,57 +210,6 @@ export default function MobileSettingsScreen() {
 
   const handleInsertTemplateTag = (tag: string) => {
     setSmsTemplate((prev) => (prev ? `${prev} ${tag}` : tag));
-  };
-
-  const handleOpenTeamModal = async () => {
-    setTeamModalVisible(true);
-    setLoadingAdmins(true);
-    try {
-      const res = await mobileApiClient.listAdmins();
-      if (res.success && res.data) {
-        setAdminsList(res.data);
-      }
-    } catch {
-      console.error("[Settings] Failed to load team list");
-    } finally {
-      setLoadingAdmins(false);
-    }
-  };
-
-  const handleCreateAdmin = async () => {
-    const username = newAdminUsername.trim().toLowerCase();
-    if (!username || username.length < 3) {
-      Alert.alert("Invalid Username", "Username must be at least 3 characters.");
-      return;
-    }
-    if (!newAdminPassword || newAdminPassword.length < 8) {
-      Alert.alert("Invalid Password", "Password must be at least 8 characters.");
-      return;
-    }
-
-    setCreatingAdmin(true);
-    try {
-      const res = await mobileApiClient.createAdmin({
-        username,
-        displayName: newAdminDisplayName.trim() || undefined,
-        password: newAdminPassword,
-      });
-
-      if (res.success) {
-        Alert.alert("Admin Created", `Administrator @${username} has been provisioned.`);
-        setNewAdminUsername("");
-        setNewAdminDisplayName("");
-        setNewAdminPassword("");
-        const listRes = await mobileApiClient.listAdmins();
-        if (listRes.success && listRes.data) setAdminsList(listRes.data);
-      } else {
-        Alert.alert("Error", res.error.message);
-      }
-    } catch {
-      Alert.alert("Error", "Network error creating administrator.");
-    } finally {
-      setCreatingAdmin(false);
-    }
   };
 
   const handleLogout = async () => {
@@ -549,22 +486,6 @@ export default function MobileSettingsScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Team Administration Button */}
-        <View style={styles.sectionCard}>
-          <Text style={styles.sectionTitle}>Administrator Accounts</Text>
-          <Text style={styles.sectionDesc}>
-            Manage team members and provision new administrative logins for your organization.
-          </Text>
-
-          <TouchableOpacity
-            style={styles.secondaryButton}
-            onPress={handleOpenTeamModal}
-          >
-            <UsersIcon size={16} color={Theme.colors.textPrimary} />
-            <Text style={styles.secondaryButtonText}>Manage Administrator Team</Text>
-          </TouchableOpacity>
-        </View>
-
         {/* Security Architecture Invariants */}
         <View style={styles.sectionCard}>
           <Text style={styles.sectionTitle}>Security & Privacy Architecture</Text>
@@ -607,88 +528,6 @@ export default function MobileSettingsScreen() {
           )}
         </TouchableOpacity>
       </ScrollView>
-
-      {/* Multi-Admin Team Modal */}
-      <Modal visible={teamModalVisible} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <View>
-                <Text style={styles.modalTitle}>Team Administrators</Text>
-                <Text style={styles.modalSubtitle}>Authorized system accounts</Text>
-              </View>
-              <TouchableOpacity
-                onPress={() => setTeamModalVisible(false)}
-                style={styles.modalCloseBtn}
-              >
-                <CloseIcon size={18} color={Theme.colors.textMuted} />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView style={{ maxHeight: 380 }}>
-              {/* Existing Admins List */}
-              <Text style={styles.modalSectionLabel}>ACTIVE ACCOUNTS</Text>
-              {loadingAdmins ? (
-                <ActivityIndicator color={Theme.colors.primary} />
-              ) : (
-                adminsList.map((a) => (
-                  <View key={a.id} style={styles.adminRow}>
-                    <View style={styles.adminAvatar}>
-                      <Text style={styles.adminAvatarText}>
-                        {(a.displayName || a.username).slice(0, 2).toUpperCase()}
-                      </Text>
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.adminName}>{a.displayName || a.username}</Text>
-                      <Text style={styles.adminUsername}>@{a.username}</Text>
-                    </View>
-                  </View>
-                ))
-              )}
-
-              {/* Provision New Admin */}
-              <Text style={[styles.modalSectionLabel, { marginTop: 16 }]}>
-                PROVISION NEW ADMIN
-              </Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Username (e.g. alex)"
-                placeholderTextColor={Theme.colors.textMuted}
-                value={newAdminUsername}
-                onChangeText={setNewAdminUsername}
-                autoCapitalize="none"
-              />
-              <TextInput
-                style={styles.input}
-                placeholder="Display Name (e.g. Alex Rivera)"
-                placeholderTextColor={Theme.colors.textMuted}
-                value={newAdminDisplayName}
-                onChangeText={setNewAdminDisplayName}
-              />
-              <TextInput
-                style={styles.input}
-                placeholder="Password (min 8 chars, 1 uppercase, 1 number)"
-                placeholderTextColor={Theme.colors.textMuted}
-                value={newAdminPassword}
-                onChangeText={setNewAdminPassword}
-                secureTextEntry
-              />
-
-              <TouchableOpacity
-                style={[styles.primaryButton, creatingAdmin && styles.buttonDisabled]}
-                onPress={handleCreateAdmin}
-                disabled={creatingAdmin}
-              >
-                {creatingAdmin ? (
-                  <ActivityIndicator color="#FFFFFF" size="small" />
-                ) : (
-                  <Text style={styles.primaryButtonText}>Create Administrator</Text>
-                )}
-              </TouchableOpacity>
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -934,78 +773,5 @@ const styles = StyleSheet.create({
     color: Theme.colors.error,
     fontWeight: "700",
     fontSize: 14,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.75)",
-    justifyContent: "flex-end",
-  },
-  modalContent: {
-    backgroundColor: Theme.colors.surface,
-    borderTopLeftRadius: Theme.radius.xl,
-    borderTopRightRadius: Theme.radius.xl,
-    padding: 20,
-    paddingBottom: 36,
-    borderTopWidth: 1,
-    borderLeftWidth: 1,
-    borderRightWidth: 1,
-    borderColor: Theme.colors.border,
-  },
-  modalHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    marginBottom: 16,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: "900",
-    color: Theme.colors.textPrimary,
-  },
-  modalSubtitle: {
-    fontSize: 12,
-    color: Theme.colors.textMuted,
-    marginTop: 2,
-  },
-  modalCloseBtn: {
-    padding: 4,
-  },
-  modalSectionLabel: {
-    fontSize: 10,
-    fontWeight: "800",
-    color: Theme.colors.textSecondary,
-    letterSpacing: 0.8,
-    marginBottom: 8,
-  },
-  adminRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    backgroundColor: Theme.colors.surfaceElevated,
-    padding: 10,
-    borderRadius: Theme.radius.md,
-    marginBottom: 8,
-  },
-  adminAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: Theme.radius.full,
-    backgroundColor: Theme.colors.primaryMuted,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  adminAvatarText: {
-    color: Theme.colors.primaryHover,
-    fontWeight: "800",
-    fontSize: 12,
-  },
-  adminName: {
-    color: Theme.colors.textPrimary,
-    fontWeight: "700",
-    fontSize: 13,
-  },
-  adminUsername: {
-    color: Theme.colors.textMuted,
-    fontSize: 11,
   },
 });

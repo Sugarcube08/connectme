@@ -36,9 +36,6 @@ model AdminUser {
   bootstrapExpiresAt DateTime?           @map("bootstrap_expires_at")
   createdAt          DateTime            @default(now()) @map("created_at")
   updatedAt          DateTime            @updatedAt @map("updated_at")
-  createdById        String?             @map("created_by_id")
-  createdBy          AdminUser?          @relation("AdminCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
-  createdUsers       AdminUser[]         @relation("AdminCreatedBy")
   accessCodes        AccessCode[]
   refreshTokens      AdminRefreshToken[]
 
@@ -51,7 +48,6 @@ model AdminUser {
   smsSenderPhone     String?            @map("sms_sender_phone") @db.VarChar(50)
   smsSenderEmail     String?            @map("sms_sender_email") @db.VarChar(191)
 
-  @@index([createdById])
   @@map("admin_users")
 }
 

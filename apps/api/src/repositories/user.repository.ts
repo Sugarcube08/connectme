@@ -1,14 +1,13 @@
 import { prisma, AdminUser, type Prisma } from "@connectme/database";
 
 export class UserRepository {
-  async findByUsername(username: string): Promise<(AdminUser & { createdBy?: AdminUser | null }) | null> {
+  async findByUsername(username: string): Promise<AdminUser | null> {
     return prisma.adminUser.findUnique({
       where: { username: username.toLowerCase().trim() },
-      include: { createdBy: true },
     });
   }
 
-  async findByUsernameOrEmail(identifier: string): Promise<(AdminUser & { createdBy?: AdminUser | null }) | null> {
+  async findByUsernameOrEmail(identifier: string): Promise<AdminUser | null> {
     const clean = identifier.toLowerCase().trim();
     return prisma.adminUser.findFirst({
       where: {
@@ -18,7 +17,6 @@ export class UserRepository {
           { phoneNumber: clean },
         ],
       },
-      include: { createdBy: true },
     });
   }
 
@@ -34,7 +32,7 @@ export class UserRepository {
     email: string;
     phoneNumber?: string;
     passwordHash: string;
-  }): Promise<AdminUser & { createdBy?: AdminUser | null }> {
+  }): Promise<AdminUser> {
     return prisma.adminUser.create({
       data: {
         username: data.username.toLowerCase().trim(),
@@ -48,23 +46,18 @@ export class UserRepository {
         isBootstrapPending: false,
         isInitialAdmin: null,
       },
-      include: {
-        createdBy: true,
-      },
     });
   }
 
-  async findById(id: string): Promise<(AdminUser & { createdBy?: AdminUser | null }) | null> {
+  async findById(id: string): Promise<AdminUser | null> {
     return prisma.adminUser.findUnique({
       where: { id },
-      include: { createdBy: true },
     });
   }
 
-  async findActiveAdmin(): Promise<(AdminUser & { createdBy?: AdminUser | null }) | null> {
+  async findActiveAdmin(): Promise<AdminUser | null> {
     return prisma.adminUser.findFirst({
       where: { isActive: true, isBootstrapPending: false, passwordHash: { not: null } },
-      include: { createdBy: true },
     });
   }
 
@@ -82,35 +75,6 @@ export class UserRepository {
 
   async findByBootstrapTokenHash(hash: string): Promise<AdminUser | null> {
     return prisma.adminUser.findUnique({ where: { bootstrapTokenHash: hash } });
-  }
-
-  async listAdmins(): Promise<(AdminUser & { createdBy?: AdminUser | null })[]> {
-    return prisma.adminUser.findMany({
-      include: { createdBy: true },
-      orderBy: { createdAt: "asc" },
-    });
-  }
-
-  async createAdmin(data: {
-    username: string;
-    displayName?: string;
-    passwordHash: string;
-    createdById?: string;
-  }): Promise<AdminUser & { createdBy?: AdminUser | null }> {
-    return prisma.adminUser.create({
-      data: {
-        username: data.username.toLowerCase().trim(),
-        displayName: data.displayName?.trim() || null,
-        passwordHash: data.passwordHash,
-        isActive: true,
-        isBootstrapPending: false,
-        isInitialAdmin: null,
-        createdById: data.createdById || null,
-      },
-      include: {
-        createdBy: true,
-      },
-    });
   }
 
   /**
@@ -141,9 +105,6 @@ export class UserRepository {
             isInitialAdmin: true,
             bootstrapTokenHash: null,
             bootstrapExpiresAt: null,
-          },
-          include: {
-            createdBy: true,
           },
         });
 
@@ -177,7 +138,7 @@ export class UserRepository {
     passwordHash: string;
     displayName?: string;
     publicOrigin?: string;
-  }): Promise<(AdminUser & { createdBy?: AdminUser | null }) | null> {
+  }): Promise<AdminUser | null> {
     try {
       return await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
         const update = await tx.adminUser.updateMany({
@@ -211,7 +172,6 @@ export class UserRepository {
         }
         return tx.adminUser.findUnique({
           where: { id: data.userId },
-          include: { createdBy: true },
         });
       }, { isolationLevel: "Serializable" });
     } catch (error) {

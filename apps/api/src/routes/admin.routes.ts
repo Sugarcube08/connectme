@@ -2,7 +2,6 @@ import { Router } from "express";
 import { CodesController } from "../controllers/codes.controller";
 import { ContactsController } from "../controllers/contacts.controller";
 import { SettingsController } from "../controllers/settings.controller";
-import { AuthController } from "../controllers/auth.controller";
 import { requireAdmin } from "../middleware/auth.middleware";
 import { validateBody } from "../middleware/validate.middleware";
 import { UpdateContactSchema, UpdateSettingsSchema, UpdateAdminSmsSettingsSchema } from "@connectme/contracts";
@@ -11,14 +10,10 @@ const router = Router();
 const codesController = new CodesController();
 const contactsController = new ContactsController();
 const settingsController = new SettingsController();
-const authController = new AuthController();
 
 router.use(requireAdmin);
 
 router.get("/dashboard", contactsController.getDashboard);
-
-// List of administrators for the team directory
-router.get("/admins", authController.listAdmins);
 
 router.get("/codes", codesController.list);
 router.post("/codes", codesController.create);

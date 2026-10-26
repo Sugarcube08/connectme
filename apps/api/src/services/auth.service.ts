@@ -14,7 +14,6 @@ import {
   BootstrapStatusDTO,
   AdminUserDTO,
   CheckUsernameDTO,
-  CreateAdminInput,
 } from "@connectme/contracts";
 import {
   UnauthorizedError,
@@ -266,18 +265,6 @@ export class AuthService {
     const webSession = await this.createWebSession(user.id, user.username);
     const refreshToken = await this.createRefreshToken(user.id);
     return { user, token, webSession, refreshToken };
-  }
-
-  async createAdmin(_actingAdminId: string, _input: CreateAdminInput): Promise<AdminUserDTO> {
-    throw new ForbiddenError(
-      "Admin creation by existing administrators has been decommissioned. New administrators must register independently through the public registration portal.",
-      "ADMIN_CREATION_DISABLED"
-    );
-  }
-
-  async listAdmins(): Promise<AdminUserDTO[]> {
-    const users = await this.userRepo.listAdmins();
-    return users.map((u) => serializeAdminUser(u));
   }
 
   async createWebSession(userId: string, username: string): Promise<string> {

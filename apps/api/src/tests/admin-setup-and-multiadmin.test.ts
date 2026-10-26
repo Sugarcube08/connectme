@@ -180,28 +180,21 @@ describe("Direct Initial Admin Setup & Multi-Admin Creator Tracking", () => {
     expect(res.body.data.user.username).toBe(thirdAdminUsername);
   });
 
-  it("GET /admin/admins returns all admins with full creator records", async () => {
+  it("GET /admin/admins is removed (returns 404) to ensure accounts are completely self-contained and individual", async () => {
     const res = await request(app)
       .get("/api/v1/admin/admins")
       .set("Cookie", initialAdminSessionCookie);
 
+    expect(res.status).toBe(404);
+  });
+
+  it("admin can access their own profile via GET /auth/me without exposure of other accounts", async () => {
+    const res = await request(app)
+      .get("/api/v1/auth/me")
+      .set("Cookie", secondAdminSessionCookie);
+
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
-    const admins = res.body.data;
-    expect(admins.length).toBe(3);
-
-    const admin1 = admins.find((a: any) => a.username === initialAdminUsername);
-    const admin2 = admins.find((a: any) => a.username === secondAdminUsername);
-    const admin3 = admins.find((a: any) => a.username === thirdAdminUsername);
-
-    expect(admin1.isInitialAdmin).toBe(true);
-    expect(admin1.createdById).toBeNull();
-    expect(admin1.createdBy).toBeNull();
-
-    expect(admin2.isInitialAdmin).toBeFalsy();
-    expect(admin2.username).toBe(secondAdminUsername);
-
-    expect(admin3.isInitialAdmin).toBeFalsy();
-    expect(admin3.username).toBe(thirdAdminUsername);
+    expect(res.body.data.user.username).toBe(secondAdminUsername);
   });
 });

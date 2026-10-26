@@ -10,7 +10,6 @@ import {
   BootstrapStatusDTO,
   AdminUserDTO,
   CheckUsernameDTO,
-  CreateAdminInput,
   DashboardMetrics,
   AccessCodeItem,
   GeneratedCodeDetail,
@@ -325,18 +324,6 @@ export class ConnectMeApiClient {
   async updateAdminSmsSettings(input: UpdateAdminSmsSettingsInput): Promise<ApiResponse<AdminSmsSettingsDTO>> {
     return this.request("/admin/settings/sms", {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(input),
-    });
-  }
-
-  async listAdmins(): Promise<ApiResponse<AdminUserDTO[]>> {
-    return this.request<AdminUserDTO[]>("/admin/admins");
-  }
-
-  async createAdmin(input: CreateAdminInput): Promise<ApiResponse<{ user: AdminUserDTO }>> {
-    return this.request<{ user: AdminUserDTO }>("/admin/admins", {
-      method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(input),
     });

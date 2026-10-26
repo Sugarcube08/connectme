@@ -7,7 +7,6 @@ import {
   LayoutDashboard,
   QrCode,
   Users,
-  UserCheck,
   Settings,
   LogOut,
   Sparkles,
@@ -40,7 +39,6 @@ export default function AdminLayout({
     { label: "Overview", href: "/admin", icon: LayoutDashboard },
     { label: "Codes & QR", href: "/admin/codes", icon: QrCode },
     { label: "Contacts", href: "/admin/contacts", icon: Users },
-    { label: "Team", href: "/admin/team", icon: UserCheck },
     { label: "Settings", href: "/admin/settings", icon: Settings },
   ];
 
