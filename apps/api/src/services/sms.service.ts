@@ -27,21 +27,20 @@ export const DEFAULT_SMS_TEMPLATE =
 
 export class SmsService {
   /**
-   * Normalizes gateway URL to target the messages endpoint.
+   * Cleans gateway URL to obtain the base origin/host without endpoint subpaths.
    */
-  private normalizeGatewayUrl(rawUrl: string): string {
+  private getBaseUrl(rawUrl: string): string {
     let url = rawUrl.trim().replace(/\/+$/, "");
-    if (!url.endsWith("/messages") && !url.endsWith("/message")) {
-      if (url.endsWith("/api/3rdparty/v1")) {
-        url = `${url}/messages`;
-      } else if (url.endsWith("/3rdparty/v1")) {
-        url = `${url}/messages`;
-      } else if (url.endsWith("/api")) {
-        url = `${url}/3rdparty/v1/messages`;
-      } else {
-        url = `${url}/api/3rdparty/v1/messages`;
-      }
-    }
+    url = url
+      .replace(/\/api\/3rdparty\/v1\/messages$/, "")
+      .replace(/\/3rdparty\/v1\/messages$/, "")
+      .replace(/\/api\/3rdparty\/v1\/devices$/, "")
+      .replace(/\/3rdparty\/v1\/devices$/, "")
+      .replace(/\/api\/3rdparty\/v1$/, "")
+      .replace(/\/3rdparty\/v1$/, "")
+      .replace(/\/messages$/, "")
+      .replace(/\/message$/, "")
+      .replace(/\/+$/, "");
     return url;
   }
 
@@ -52,8 +51,17 @@ export class SmsService {
     recipientPhone: string;
     message: string;
   }): Promise<{ success: boolean; messageId?: string; error?: string }> {
+    const fetchFn = (globalThis as unknown as {
+      fetch: (url: string, init?: unknown) => Promise<{
+        ok: boolean;
+        status: number;
+        text: () => Promise<string>;
+        json: () => Promise<unknown>;
+      }>;
+    }).fetch;
+
     try {
-      const endpoint = this.normalizeGatewayUrl(options.gatewayUrl);
+      const baseUrl = this.getBaseUrl(options.gatewayUrl);
       const auth = Buffer.from(`${options.username}:${options.password}`).toString("base64");
 
       // Normalize phone to strict E.164 (+<digits>)
@@ -62,95 +70,109 @@ export class SmsService {
         cleanPhone = `+${cleanPhone}`;
       }
 
-      // Modern SMS-Gateway spec uses textMessage.text.
-      // Mutual exclusivity is strictly enforced by SMS-Gateway; sending both 'message' and 'textMessage' returns HTTP 400.
-      const payload: Record<string, unknown> = {
+      // 1. First probe the startup/health endpoint (wakes up free Render instances)
+      const healthUrl = `${baseUrl}/health/startup`;
+      console.log(`\n[SmsService] [1] Pinging startup endpoint: ${healthUrl}`);
+      try {
+        const healthResp = await fetchFn(healthUrl, {
+          method: "GET",
+          signal: AbortSignal.timeout(6000),
+        });
+        console.log(`[SmsService]     Status: ${healthResp.status}`);
+      } catch (e: any) {
+        console.log(`[SmsService]     Health check note: ${e?.message || e}`);
+      }
+
+      // 2. Check registered devices (confirms your phone is connected)
+      const devicesUrl = `${baseUrl}/api/3rdparty/v1/devices`;
+      console.log(`[SmsService] [2] Checking online devices: ${devicesUrl}`);
+      try {
+        let devResp = await fetchFn(devicesUrl, {
+          method: "GET",
+          headers: { Authorization: `Basic ${auth}` },
+          signal: AbortSignal.timeout(5000),
+        });
+        if (devResp.status === 404) {
+          devResp = await fetchFn(`${baseUrl}/3rdparty/v1/devices`, {
+            method: "GET",
+            headers: { Authorization: `Basic ${auth}` },
+            signal: AbortSignal.timeout(5000),
+          });
+        }
+        console.log(`[SmsService]     Device check status: ${devResp.status}`);
+      } catch (e: any) {
+        console.log(`[SmsService]     Device check note: ${e?.message || e}`);
+      }
+
+      // 3. Trigger SMS Dispatch
+      const endpoint = `${baseUrl}/api/3rdparty/v1/messages`;
+      // Note: Modern SMS Gateway expects 'textMessage: {"text": ...}'.
+      // Never provide both 'message' and 'textMessage' together, as the gateway
+      // strictly enforces mutual exclusivity and will return 400 conflict fields.
+      const payload = {
         textMessage: {
           text: options.message,
         },
         phoneNumbers: [cleanPhone],
-        priority: 100, // Priority 100 bypasses queue wait and carrier throttle limits
+        priority: 100,
         withDeliveryReport: true,
       };
 
-      console.log(`[SmsService] Dispatching auto-SMS to ${endpoint} for ${cleanPhone}...`);
+      console.log(`[SmsService] [3] Triggering SMS Dispatch:`);
+      console.log(`    POST ${endpoint}`);
+      console.log(`    Auth: HTTP Basic (${options.username}:****)`);
+      console.log(`    Recipient: ${cleanPhone}`);
 
-      const fetchFn = (globalThis as unknown as {
-        fetch: (url: string, init?: unknown) => Promise<{
-          ok: boolean;
-          status: number;
-          text: () => Promise<string>;
-          json: () => Promise<unknown>;
-        }>;
-      }).fetch;
-
-      let res = await fetchFn(endpoint, {
+      let resp = await fetchFn(endpoint, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Basic ${auth}`,
         },
         body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(15000),
       });
 
-      let activeEndpoint = endpoint;
-
-      // If 404, try alternative path (e.g. /3rdparty/v1/messages vs /api/3rdparty/v1/messages)
-      if (res.status === 404) {
-        let altEndpoint: string | null = null;
-        if (endpoint.includes("/api/3rdparty/v1/messages")) {
-          altEndpoint = endpoint.replace("/api/3rdparty/v1/messages", "/3rdparty/v1/messages");
-        } else if (endpoint.includes("/3rdparty/v1/messages")) {
-          altEndpoint = endpoint.replace("/3rdparty/v1/messages", "/api/3rdparty/v1/messages");
-        }
-
-        if (altEndpoint) {
-          console.log(`[SmsService] Endpoint 404 on ${endpoint}, trying alternate ${altEndpoint}...`);
-          activeEndpoint = altEndpoint;
-          res = await fetchFn(activeEndpoint, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Basic ${auth}`,
-            },
-            body: JSON.stringify(payload),
-          });
-        }
-      }
-
-      // If 400, retry with legacy payload format in case an older gateway only supports 'message'
-      if (res.status === 400) {
-        const legacyPayload = {
-          message: options.message,
-          phoneNumbers: [cleanPhone],
-          priority: 100,
-          withDeliveryReport: true,
-        };
-        const retryRes = await fetchFn(activeEndpoint, {
+      // Fallback if server mounts at /3rdparty/v1/messages without /api
+      if (resp.status === 404) {
+        const altEndpoint = `${baseUrl}/3rdparty/v1/messages`;
+        console.log(`[SmsService]     404 received, trying alternate: ${altEndpoint}`);
+        resp = await fetchFn(altEndpoint, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
             Authorization: `Basic ${auth}`,
           },
-          body: JSON.stringify(legacyPayload),
+          body: JSON.stringify(payload),
+          signal: AbortSignal.timeout(15000),
         });
-        if (retryRes.ok) {
-          res = retryRes;
-        }
       }
 
-      if (!res.ok) {
-        const errText = await res.text();
-        console.error(`[SmsService] Gateway HTTP ${res.status}:`, errText);
-        return { success: false, error: `Gateway status ${res.status}: ${errText}` };
-      }
+      const respText = await resp.text();
+      console.log(`[SmsService] [4] Result:`);
+      console.log(`    HTTP Status: ${resp.status}`);
+      console.log(`    Response Body: ${respText}`);
 
-      const data = (await res.json().catch(() => ({}))) as { id?: string };
-      console.log(`[SmsService] Successfully enqueued SMS to ${cleanPhone}, id:`, data.id || "enqueued");
-      return { success: true, messageId: data.id };
+      if (resp.status === 200 || resp.status === 201 || resp.status === 202) {
+        console.log("[SmsService] >>> SUCCESS: Gateway accepted the message for sending!");
+        let data: any = {};
+        try {
+          data = JSON.parse(respText);
+        } catch {}
+        return { success: true, messageId: data?.id || "enqueued" };
+      } else if (resp.status === 401) {
+        console.error("[SmsService] >>> FAILED: 401 Unauthorized. Check your username and password.");
+        return { success: false, error: "401 Unauthorized. Check username and password." };
+      } else if (resp.status === 503) {
+        console.error("[SmsService] >>> FAILED: 503 Service Unavailable. Your Android phone is OFFLINE.");
+        return { success: false, error: "503 Service Unavailable. Your Android phone is OFFLINE." };
+      } else {
+        console.error(`[SmsService] >>> FAILED: Gateway returned status ${resp.status}`);
+        return { success: false, error: `Gateway returned status ${resp.status}: ${respText}` };
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      console.error("[SmsService] Failed to send SMS:", msg);
+      console.error("[SmsService] Request error:", msg);
       return { success: false, error: msg };
     }
   }

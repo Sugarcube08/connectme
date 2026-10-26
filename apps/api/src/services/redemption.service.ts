@@ -129,24 +129,23 @@ export class RedemptionService {
           });
 
           console.log(`[RedemptionService] Auto-triggering SMS to ${cleanPhoneNumber} via ${admin.smsGatewayUrl}...`);
-          this.smsService
-            .sendContactSms({
+          try {
+            const result = await this.smsService.sendContactSms({
               gatewayUrl: admin.smsGatewayUrl,
               username: admin.smsGatewayUsername,
               password,
               recipientPhone: cleanPhoneNumber,
               message,
-            })
-            .then((result) => {
-              if (result.success) {
-                console.log(`[RedemptionService] Auto-SMS enqueued successfully, id: ${result.messageId}`);
-              } else {
-                console.error(`[RedemptionService] Auto-SMS dispatch failed: ${result.error}`);
-              }
-            })
-            .catch((err) => {
-              console.error("[RedemptionService] Failed to trigger SMS dispatch:", err);
             });
+
+            if (result.success) {
+              console.log(`[RedemptionService] Auto-SMS enqueued successfully, id: ${result.messageId}`);
+            } else {
+              console.error(`[RedemptionService] Auto-SMS dispatch failed: ${result.error}`);
+            }
+          } catch (err) {
+            console.error("[RedemptionService] Failed to trigger SMS dispatch:", err);
+          }
         } else {
           console.warn("[RedemptionService] SMS gateway password could not be decrypted or is empty.");
         }

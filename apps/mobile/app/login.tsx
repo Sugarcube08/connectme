@@ -4,7 +4,7 @@ import {
   KeyboardAvoidingView, Platform, ScrollView,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { mobileApiClient } from "../lib/api";
+import { mobileApiClient, API_BASE_URL } from "../lib/api";
 import { saveAuthTokens } from "../lib/auth";
 
 export default function LoginScreen() {
@@ -16,6 +16,10 @@ export default function LoginScreen() {
 
   const handleLogin = async () => {
     setError(null);
+    if (!API_BASE_URL) {
+      setError("EXPO_PUBLIC_API_URL is not configured in .env");
+      return;
+    }
     if (!email.trim() || !password.trim()) {
       setError("Please enter both username and password.");
       return;
@@ -29,8 +33,9 @@ export default function LoginScreen() {
       } else {
         setError(!res.success ? res.error.message : "Login response did not include required session tokens.");
       }
-    } catch {
-      setError("Network error connecting to backend.");
+    } catch (err: any) {
+      console.error("[Login] Network failure:", err);
+      setError(`Network error connecting to backend: ${err?.message || "Check connection"}`);
     } finally {
       setLoading(false);
     }
