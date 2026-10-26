@@ -1,11 +1,20 @@
 import React, { useState } from "react";
 import {
-  View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator,
-  KeyboardAvoidingView, Platform, ScrollView,
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { mobileApiClient, API_BASE_URL } from "../lib/api";
 import { saveAuthTokens } from "../lib/auth";
+import { SparklesIcon, LockIcon, ShieldCheckIcon } from "../components/Icons";
+import { Theme } from "../constants/theme";
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -21,12 +30,12 @@ export default function LoginScreen() {
       return;
     }
     if (!email.trim() || !password.trim()) {
-      setError("Please enter both username and password.");
+      setError("Please enter both administrator username and password.");
       return;
     }
     setLoading(true);
     try {
-      const res = await mobileApiClient.login({ username: email.trim(), password });
+      const res = await mobileApiClient.login({ username: email.trim().toLowerCase(), password });
       if (res.success && res.data.token && res.data.refreshToken) {
         await saveAuthTokens(res.data.token, res.data.refreshToken);
         router.replace("/(tabs)");
@@ -42,26 +51,83 @@ export default function LoginScreen() {
   };
 
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.container}>
+    <KeyboardAvoidingView
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      style={styles.container}
+    >
       <ScrollView contentContainerStyle={styles.scroll}>
         <View style={styles.card}>
-          <View style={styles.badge}><Text style={styles.badgeText}>DEVCON ADMIN</Text></View>
-          <Text style={styles.title}>Connect Me</Text>
-          <Text style={styles.subtitle}>“You share. We connect.”</Text>
-          {error && <View style={styles.errorBox}><Text style={styles.errorText}>{error}</Text></View>}
+          {/* Top Brand Badge */}
+          <View style={styles.badge}>
+            <SparklesIcon size={12} color={Theme.colors.gold} />
+            <Text style={styles.badgeText}>ADMINISTRATOR ACCESS</Text>
+          </View>
+
+          {/* Title */}
+          <Text style={styles.title}>
+            CONNECT <Text style={{ color: Theme.colors.primaryHover }}>ME</Text>
+          </Text>
+          <Text style={styles.tagline}>“You share. We connect.”</Text>
+          <Text style={styles.subtitle}>
+            Privacy-First Smart Connection & Lead Intelligence
+          </Text>
+
+          {/* Error Message */}
+          {error && (
+            <View style={styles.errorBox}>
+              <Text style={styles.errorText}>{error}</Text>
+            </View>
+          )}
+
+          {/* Form Fields */}
           <View style={styles.inputGroup}>
             <Text style={styles.label}>ADMIN USERNAME</Text>
-            <TextInput style={styles.input} placeholder="e.g. harsh" placeholderTextColor="#777681"
-              value={email} onChangeText={setEmail} autoCapitalize="none" />
+            <TextInput
+              style={styles.input}
+              placeholder="e.g. admin or harsh"
+              placeholderTextColor={Theme.colors.textMuted}
+              value={email}
+              onChangeText={setEmail}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
           </View>
+
           <View style={styles.inputGroup}>
             <Text style={styles.label}>PASSWORD</Text>
-            <TextInput style={styles.input} placeholder="••••••••••••" placeholderTextColor="#777681"
-              value={password} onChangeText={setPassword} secureTextEntry />
+            <TextInput
+              style={styles.input}
+              placeholder="••••••••••••"
+              placeholderTextColor={Theme.colors.textMuted}
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+            />
           </View>
-          <TouchableOpacity style={[styles.button, loading && styles.buttonDisabled]} onPress={handleLogin} disabled={loading}>
-            {loading ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.buttonText}>Sign In</Text>}
+
+          {/* Submit Button */}
+          <TouchableOpacity
+            style={[styles.button, loading && styles.buttonDisabled]}
+            onPress={handleLogin}
+            disabled={loading}
+          >
+            {loading ? (
+              <ActivityIndicator color="#FFFFFF" size="small" />
+            ) : (
+              <View style={styles.buttonContent}>
+                <LockIcon size={16} color="#FFFFFF" />
+                <Text style={styles.buttonText}>Authenticate Session</Text>
+              </View>
+            )}
           </TouchableOpacity>
+
+          {/* Footer Security Note */}
+          <View style={styles.footerNote}>
+            <ShieldCheckIcon size={15} color={Theme.colors.primary} />
+            <Text style={styles.footerNoteText}>
+              Protected by Argon2id hashing & single-use cryptographic tokens
+            </Text>
+          </View>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -69,24 +135,141 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#0B0B10" },
-  scroll: { flexGrow: 1, justifyContent: "center", padding: 20 },
-  card: { backgroundColor: "#13121C", borderRadius: 20, borderWidth: 1, borderColor: "#2F2B48", padding: 24,
-    shadowColor: "#6D3CE8", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 16, elevation: 8 },
-  badge: { alignSelf: "center", backgroundColor: "rgba(109, 60, 232, 0.15)", borderWidth: 1,
-    borderColor: "rgba(109, 60, 232, 0.4)", borderRadius: 20, paddingHorizontal: 12, paddingVertical: 4, marginBottom: 12 },
-  badgeText: { color: "#C8A96B", fontSize: 10, fontWeight: "700", letterSpacing: 1 },
-  title: { fontSize: 26, fontWeight: "900", color: "#F3EFE7", textAlign: "center" },
-  subtitle: { fontSize: 13, fontStyle: "italic", color: "#777681", textAlign: "center", marginBottom: 24 },
-  errorBox: { backgroundColor: "rgba(248, 113, 113, 0.1)", borderWidth: 1, borderColor: "rgba(248, 113, 113, 0.3)",
-    borderRadius: 10, padding: 10, marginBottom: 16 },
-  errorText: { color: "#F87171", fontSize: 12 },
-  inputGroup: { marginBottom: 16 },
-  label: { color: "#A5A4B2", fontSize: 11, fontWeight: "700", letterSpacing: 0.8, marginBottom: 6 },
-  input: { backgroundColor: "#1C1A29", borderWidth: 1, borderColor: "#2F2B48", borderRadius: 12,
-    paddingHorizontal: 14, paddingVertical: 12, color: "#F3EFE7", fontSize: 14 },
-  button: { backgroundColor: "#6D3CE8", borderRadius: 14, paddingVertical: 14, alignItems: "center", marginTop: 12,
-    shadowColor: "#6D3CE8", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 10, elevation: 4 },
-  buttonDisabled: { opacity: 0.6 },
-  buttonText: { color: "#FFFFFF", fontSize: 14, fontWeight: "700" },
+  container: {
+    flex: 1,
+    backgroundColor: Theme.colors.background,
+  },
+  scroll: {
+    flexGrow: 1,
+    justifyContent: "center",
+    padding: 20,
+    paddingBottom: 40,
+  },
+  card: {
+    backgroundColor: Theme.colors.surface,
+    borderRadius: Theme.radius.xl,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.5,
+    shadowRadius: 24,
+    elevation: 8,
+  },
+  badge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    alignSelf: "flex-start",
+    backgroundColor: Theme.colors.surfaceElevated,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: Theme.radius.full,
+    marginBottom: 16,
+  },
+  badgeText: {
+    color: Theme.colors.gold,
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 1,
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: "900",
+    color: Theme.colors.textPrimary,
+    letterSpacing: -0.5,
+  },
+  tagline: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: Theme.colors.gold,
+    fontStyle: "italic",
+    marginTop: 4,
+  },
+  subtitle: {
+    fontSize: 12,
+    color: Theme.colors.textSecondary,
+    marginTop: 6,
+    marginBottom: 20,
+    lineHeight: 18,
+  },
+  errorBox: {
+    backgroundColor: Theme.colors.errorBg,
+    borderColor: Theme.colors.errorBorder,
+    borderWidth: 1,
+    padding: 12,
+    borderRadius: Theme.radius.md,
+    marginBottom: 18,
+  },
+  errorText: {
+    color: Theme.colors.error,
+    fontSize: 13,
+    fontWeight: "500",
+    lineHeight: 18,
+  },
+  inputGroup: {
+    marginBottom: 16,
+  },
+  label: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: Theme.colors.textSecondary,
+    marginBottom: 6,
+    letterSpacing: 0.8,
+  },
+  input: {
+    backgroundColor: Theme.colors.surfaceElevated,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+    borderRadius: Theme.radius.md,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    color: Theme.colors.textPrimary,
+    fontSize: 15,
+  },
+  button: {
+    backgroundColor: Theme.colors.primary,
+    borderRadius: Theme.radius.md,
+    paddingVertical: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 8,
+    shadowColor: Theme.colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 10,
+    elevation: 4,
+  },
+  buttonDisabled: {
+    opacity: 0.6,
+  },
+  buttonContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  buttonText: {
+    color: "#FFFFFF",
+    fontWeight: "700",
+    fontSize: 14,
+    letterSpacing: 0.4,
+  },
+  footerNote: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 20,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: Theme.colors.surfaceElevated,
+  },
+  footerNoteText: {
+    fontSize: 11,
+    color: Theme.colors.textMuted,
+    flex: 1,
+    lineHeight: 16,
+  },
 });

@@ -78,10 +78,10 @@ export default function AdminDashboardPage() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-warmIvory sm:text-3xl">
-            Devcon Operations
+            Executive Operations
           </h1>
           <p className="mt-1 text-xs text-slate-light">
-            Overview of single-use visiting codes and collected professional contacts
+            Overview of single-use connection codes and collected professional contacts
           </p>
         </div>
 

@@ -36,7 +36,7 @@ export default function HomePage() {
       <div className="mx-auto max-w-2xl">
         <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-royalViolet/40 bg-royalViolet/10 px-4 py-1.5 text-xs font-medium tracking-wide text-warmIvory backdrop-blur-md">
           <Sparkles className="h-3.5 w-3.5 text-metallicGold" />
-          <span>DEVCON PROFESSIONAL NETWORKING</span>
+          <span>PRIVACY-FIRST SMART CONNECTION PLATFORM</span>
         </div>
 
         <h1 className="mb-4 text-4xl font-extrabold tracking-tight text-warmIvory sm:text-5xl md:text-6xl">
@@ -46,9 +46,9 @@ export default function HomePage() {
           &ldquo;You share. We connect.&rdquo;
         </p>
         <p className="mb-10 text-base leading-relaxed text-slate-light sm:text-lg">
-          A lightweight, private, single-use QR-based networking platform.
-          Scan a card, share your details securely, and keep meaningful conference
-          conversations alive.
+          A lightweight, private, single-use QR-based networking and lead capture engine.
+          Scan a card, share your details securely, and turn high-value event conversations
+          into enduring professional relationships.
         </p>
 
         <div className="mb-12 grid grid-cols-1 gap-4 text-left sm:grid-cols-2">
@@ -85,7 +85,7 @@ export default function HomePage() {
         </div>
 
         <p className="mt-16 text-xs text-slate">
-          Built for Devcon &bull; Single-use token architecture &bull; Connect Me
+          Universal Connection Platform &bull; Single-use token architecture &bull; Connect Me
         </p>
       </div>
     </main>

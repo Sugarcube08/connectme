@@ -544,7 +544,7 @@ export default function PublicContactPage({ params }: PublicPageProps) {
           <p className="mb-6 text-sm text-slate-light leading-relaxed">
             This single-use access code has already been redeemed. If you&apos;ve already shared your details, you&apos;re on my radar.
           </p>
-          <div className="text-xs text-slate">Connect Me &bull; Devcon</div>
+          <div className="text-xs text-slate">Connect Me &bull; Smart Network</div>
         </div>
       </div>
     );
@@ -561,7 +561,7 @@ export default function PublicContactPage({ params }: PublicPageProps) {
           <p className="mb-6 text-sm text-slate-light leading-relaxed">
             This invitation link is expired or no longer available.
           </p>
-          <div className="text-xs text-slate">Connect Me &bull; Devcon</div>
+          <div className="text-xs text-slate">Connect Me &bull; Smart Network</div>
         </div>
       </div>
     );
@@ -707,7 +707,7 @@ export default function PublicContactPage({ params }: PublicPageProps) {
                 rows={3}
                 value={discussionNotes}
                 onChange={(e) => setDiscussionNotes(e.target.value)}
-                placeholder="Mention what we chatted about at Devcon or shared ideas..."
+                placeholder="Mention what we chatted about, mutual interests, or shared ideas..."
                 className="w-full rounded-xl border border-obsidian-border bg-obsidian-elevated px-4 py-3 text-sm text-warmIvory placeholder-slate transition focus:border-royalViolet focus:outline-none focus:ring-1 focus:ring-royalViolet"
               />
             </div>

@@ -457,7 +457,7 @@ export default function AdminContactsPage() {
                   rows={4}
                   value={editNotes}
                   onChange={(e) => setEditNotes(e.target.value)}
-                  placeholder="Notes from Devcon chat or follow-up plans..."
+                  placeholder="Notes from meeting discussion, event chat, or follow-up plans..."
                   className="w-full rounded-xl border border-obsidian-border bg-obsidian-elevated p-3 text-xs text-warmIvory focus:border-royalViolet focus:outline-none"
                 />
                 <div className="mt-2 flex justify-end">

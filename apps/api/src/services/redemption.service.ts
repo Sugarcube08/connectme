@@ -104,7 +104,7 @@ export class RedemptionService {
       }
 
       return { sub, admin: adminUser };
-    });
+    }, { timeout: 20000, maxWait: 10000 });
 
     // Auto-trigger SMS via configured SMS Gateway if admin enabled it
     if (admin) {
