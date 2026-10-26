@@ -62,9 +62,9 @@ export class SmsService {
         cleanPhone = `+${cleanPhone}`;
       }
 
-      // Supports both standard SMS-Gate spec (textMessage.text) and legacy (message)
-      const payload = {
-        message: options.message,
+      // Modern SMS-Gateway spec uses textMessage.text.
+      // Mutual exclusivity is strictly enforced by SMS-Gateway; sending both 'message' and 'textMessage' returns HTTP 400.
+      const payload: Record<string, unknown> = {
         textMessage: {
           text: options.message,
         },
@@ -93,6 +93,8 @@ export class SmsService {
         body: JSON.stringify(payload),
       });
 
+      let activeEndpoint = endpoint;
+
       // If 404, try alternative path (e.g. /3rdparty/v1/messages vs /api/3rdparty/v1/messages)
       if (res.status === 404) {
         let altEndpoint: string | null = null;
@@ -104,7 +106,8 @@ export class SmsService {
 
         if (altEndpoint) {
           console.log(`[SmsService] Endpoint 404 on ${endpoint}, trying alternate ${altEndpoint}...`);
-          res = await fetchFn(altEndpoint, {
+          activeEndpoint = altEndpoint;
+          res = await fetchFn(activeEndpoint, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -112,6 +115,27 @@ export class SmsService {
             },
             body: JSON.stringify(payload),
           });
+        }
+      }
+
+      // If 400, retry with legacy payload format in case an older gateway only supports 'message'
+      if (res.status === 400) {
+        const legacyPayload = {
+          message: options.message,
+          phoneNumbers: [cleanPhone],
+          priority: 100,
+          withDeliveryReport: true,
+        };
+        const retryRes = await fetchFn(activeEndpoint, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Basic ${auth}`,
+          },
+          body: JSON.stringify(legacyPayload),
+        });
+        if (retryRes.ok) {
+          res = retryRes;
         }
       }
 
