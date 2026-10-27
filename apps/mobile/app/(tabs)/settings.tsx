@@ -349,7 +349,7 @@ export default function MobileSettingsScreen() {
                 <Text style={styles.label}>SENDER PHONE NUMBER (OPTIONAL)</Text>
                 <TextInput
                   style={styles.input}
-                  placeholder="+916260329127"
+                  placeholder="+919999999999"
                   placeholderTextColor={Theme.colors.textMuted}
                   value={smsSenderPhone}
                   onChangeText={setSmsSenderPhone}
